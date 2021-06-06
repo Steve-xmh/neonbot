@@ -1,6 +1,6 @@
 import { Client, createClient } from 'oicq'
-import { parentPort } from 'worker_threads'
-import { logger } from '.'
+import { parentPort, Worker } from 'worker_threads'
+import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
@@ -10,6 +10,149 @@ import { randonID } from './utils'
 let bot: Client
 let plugin: NeonPlugin
 const botProxies = new Map<number, BotProxy>()
+const invokeIds = new Map<string, string>()
+
+export function createCorePluginWorker (plugin: NeonPlugin) {
+    const pluginWorker = new Worker(indexPath, {
+        workerData: {
+            logger: `[NCP:${plugin.shortName}]`
+        }
+    })
+    pluginWorker.postMessage({
+        id: randonID(),
+        type: 'deploy-worker',
+        value: {
+            workerType: messages.WorkerType.CorePlugin,
+            pluginId: plugin.id,
+            config: {
+                admins: [...config.admins]
+            }
+        }
+    } as messages.DeployWorkerMessage<messages.DeployCorePluginWorkerData>)
+    pluginWorker.once('error', (err) => {
+        logger.warn(`核心插件 ${plugin.name || plugin.shortName || plugin.id} 线程发生错误，正在尝试重启`, err)
+    })
+    pluginWorker.on('message', (data: messages.BaseMessage) => {
+        if (data.type === 'node-oicq-invoke') {
+            invokeIds.set(data.id, plugin.id)
+            const invokeData = (data as messages.NodeOICQInvokeMessage).value
+            const bot = botWorkers.get(invokeData.qqId)
+            if (bot) {
+                bot.postMessage(data)
+            } else {
+                pluginWorker.postMessage({
+                    id: data.id,
+                    type: data.type,
+                    succeed: false,
+                    value: '无法找到机器人'
+                } as messages.BaseResult)
+            }
+        }
+    })
+    pluginWorker.once('online', () => {
+        for (const [qqId] of botWorkers) {
+            pluginWorker.postMessage({
+                id: randonID(),
+                type: 'enable-plugin',
+                value: {
+                    qqId
+                }
+            } as messages.SetPluginMessage)
+        }
+    })
+    return pluginWorker
+}
+
+export function createBotWorker (qqId: number) {
+    const botConfig = {
+        ...config.accounts[qqId],
+        data_dir: config.dataDir
+    }
+    const botWorker = new Worker(indexPath, {
+        workerData: {
+            logger: `[NBot#${qqId}]`
+        }
+    })
+    botWorker.postMessage({
+        id: randonID(),
+        type: 'deploy-worker',
+        value: {
+            workerType: messages.WorkerType.Bot,
+            qqid: qqId,
+            config: botConfig
+        }
+    } as messages.DeployWorkerMessage<messages.DeployBotWorkerData>)
+    botWorker.once('error', (err) => {
+        logger.warn(`机器人 #${qqId} 线程发生错误，正在尝试重启`, err)
+    })
+    botWorker.on('message', (data: messages.BaseMessage) => {
+        if (data.type === 'node-oicq-event') {
+            const evt = (data as messages.NodeOICQEventMessage).value
+            if (evt.post_type === 'message' && evt.message_type === 'private') {
+                if (config.admins.includes(data.value.user_id)) {
+                    for (const [, plugin] of corePluginWorkers) {
+                        plugin.postMessage(data)
+                    }
+                }
+            }
+            for (const [, plugin] of pluginWorkers) {
+                plugin.postMessage(data)
+            }
+        } else if (data.type === 'node-oicq-invoke') {
+            const pluginId = invokeIds.get(data.id)!!
+            const corePlugin = corePluginWorkers.get(pluginId)
+            const plugin = pluginWorkers.get(pluginId)
+            if (corePlugin) {
+                corePlugin.postMessage(data)
+            } else if (plugin) {
+                plugin.postMessage(data)
+            } else {
+                logger.warn('未知 ID 的回调信息被传回：', data)
+            }
+        }
+    })
+    return botWorker
+}
+
+export function createPluginWorker (pluginPath: string) {
+    const pluginWorker = new Worker(indexPath, {
+        workerData: {
+            logger: `[NP:${plugin.shortName}]`
+        }
+    })
+    pluginWorker.postMessage({
+        id: randonID(),
+        type: 'deploy-worker',
+        value: {
+            workerType: messages.WorkerType.Plugin,
+            pluginPath: pluginPath,
+            config: {
+                admins: [...config.admins]
+            }
+        }
+    } as messages.DeployWorkerMessage<messages.DeployPluginWorkerData>)
+    pluginWorker.once('error', (err) => {
+        logger.warn(`插件 ${plugin.name || plugin.shortName || plugin.id} 线程发生错误，正在尝试重启`, err)
+    })
+    pluginWorker.on('message', (data: messages.BaseMessage) => {
+        if (data.type === 'node-oicq-invoke') {
+            invokeIds.set(data.id, plugin.id)
+            const invokeData = (data as messages.NodeOICQInvokeMessage).value
+            const bot = botWorkers.get(invokeData.qqId)
+            if (bot) {
+                bot.postMessage(data)
+            } else {
+                pluginWorker.postMessage({
+                    id: data.id,
+                    type: data.type,
+                    succeed: false,
+                    value: '无法找到机器人'
+                } as messages.BaseResult)
+            }
+        }
+    })
+    return pluginWorker
+}
 
 export async function onWorkerMessage (message: messages.BaseMessage) {
     switch (message.type) {
@@ -111,7 +254,7 @@ export async function onWorkerMessage (message: messages.BaseMessage) {
         const data = message as messages.NodeOICQInvokeMessage
         const invokeData = data.value
         if (typeof (bot as any)[invokeData.methodName] === 'function') {
-            const result = (bot as any)[invokeData.methodName](...invokeData.arguments)
+            const result = (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
             if (result instanceof Promise) {
                 try {
                     parentPort!!.postMessage({

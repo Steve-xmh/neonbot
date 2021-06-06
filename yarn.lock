@@ -69,6 +69,11 @@
   resolved "https://registry.npm.taobao.org/@types/json5/download/@types/json5-0.0.29.tgz#ee28707ae94e11d2b827bcbe5270bcea7f3e71ee"
   integrity sha1-7ihweulOEdK4J7y+UnC86n8+ce4=
 
+"@types/lockfile@^1.0.1":
+  version "1.0.1"
+  resolved "https://registry.nlark.com/@types/lockfile/download/@types/lockfile-1.0.1.tgz#434a3455e89843312f01976e010c60f1bcbd56f7"
+  integrity sha1-Q0o0VeiYQzEvAZduAQxg8by9Vvc=
+
 "@types/node@^15.6.1":
   version "15.12.1"
   resolved "https://registry.nlark.com/@types/node/download/@types/node-15.12.1.tgz#9b60797dee1895383a725f828a869c86c6caa5c2"
@@ -1027,6 +1032,13 @@ locate-path@^2.0.0:
     p-locate "^2.0.0"
     path-exists "^3.0.0"
 
+lockfile@^1.0.4:
+  version "1.0.4"
+  resolved "https://registry.npm.taobao.org/lockfile/download/lockfile-1.0.4.tgz#07f819d25ae48f87e538e6578b6964a4981a5609"
+  integrity sha1-B/gZ0lrkj4flOOZXi2lkpJgaVgk=
+  dependencies:
+    signal-exit "^3.0.2"
+
 lodash.clonedeep@^4.5.0:
   version "4.5.0"
   resolved "https://registry.nlark.com/lodash.clonedeep/download/lodash.clonedeep-4.5.0.tgz#e23f3f9c4f8fbdde872529c1071857a086e5ccef"
@@ -1413,6 +1425,11 @@ shebang-regex@^3.0.0:
   version "3.0.0"
   resolved "https://registry.nlark.com/shebang-regex/download/shebang-regex-3.0.0.tgz#ae16f1644d873ecad843b0307b143362d4c42172"
   integrity sha1-rhbxZE2HPsrYQ7AwexQzYtTEIXI=
+
+signal-exit@^3.0.2:
+  version "3.0.3"
+  resolved "https://registry.npm.taobao.org/signal-exit/download/signal-exit-3.0.3.tgz#a1410c2edd8f077b08b4e253c8eacfcaf057461c"
+  integrity sha1-oUEMLt2PB3sItOJTyOrPyvBXRhw=
 
 slash@^3.0.0:
   version "3.0.0"

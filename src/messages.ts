@@ -14,6 +14,7 @@ export namespace messages {
 
     export type EventNames = 'listen-event-message' |
         'deploy-worker' |
+        'list-plugins' |
         'enable-plugin' |
         'disable-plugin' |
         'verify-message' |
@@ -110,8 +111,13 @@ export namespace messages {
     export interface SetPluginMessage extends BaseMessage {
         type: 'enable-plugin' | 'disable-plugin'
         value: {
-            qqId: number
+            qqId: number,
+            pluginId?: string
         }
+    }
+
+    export interface ListPluginMessage extends BaseMessage {
+        type: 'list-plugins'
     }
 
     export interface GetSaveDataMessage extends BaseMessage {

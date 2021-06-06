@@ -144,7 +144,7 @@ export class BotProxy extends EventEmitter {
         })
     }
 
-    private invoke (type: messages.EventNames, value: any): Promise<any> {
+    private invoke (type: messages.EventNames, value?: any): Promise<any> {
         return new Promise((resolve, reject) => {
             const msg = messages.makeMessage(type, value)
             this.awaitingPromises.set(msg.id, [resolve, reject])
@@ -152,10 +152,52 @@ export class BotProxy extends EventEmitter {
         })
     }
 
-    private send (type: messages.EventNames, value: any): string {
+    private send (type: messages.EventNames, value?: any): string {
         const msg = messages.makeMessage(type, value)
         parentPort!!.postMessage(msg)
         return msg.id
+    }
+
+    /** 获取可用的插件列表，**仅核心插件可用，普通插件调用将会抛出错误** */
+    getListPlugin () {
+        return this.invoke('list-plugins') as Promise<string[]>
+    }
+
+    /** 对机器人启用插件，**仅核心插件可用，普通插件调用将会抛出错误** */
+    enablePlugin (pluginId: string) {
+        return this.invoke('enable-plugin', {
+            qqId: this.qqid,
+            pluginId
+        }) as Promise<void>
+    }
+
+    /** 禁用插件，**仅核心插件可用，普通插件调用将会抛出错误** */
+    disablePlugin (pluginId: string) {
+        return this.invoke('disable-plugin', {
+            qqId: this.qqid,
+            pluginId
+        }) as Promise<void>
+    }
+
+    getFriendList () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getFriendList'
+        }) as Promise<oicq.Ret<oicq.Client['fl']>>
+    }
+
+    getStrangerList () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getStrangerList'
+        }) as Promise<oicq.Ret<oicq.Client['sl']>>
+    }
+
+    getGroupList () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getGroupList'
+        }) as Promise<oicq.Ret<oicq.Client['gl']>>
     }
 
     sendGroupMsg (groupId: number, messages: messages.OICQMessage, autoEscape: boolean = false) {
@@ -172,10 +214,6 @@ export class BotProxy extends EventEmitter {
             methodName: 'sendPrivateMsg',
             arguments: [userId, messages, autoEscape]
         }) as Promise<oicq.Ret>
-    }
-
-    async getLocalSaveData () {
-
     }
 
     setGroupAddRequest (flag: string, approve?: boolean, reason?: string, block?: boolean) {

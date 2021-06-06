@@ -6,7 +6,10 @@ import { randonID } from './utils'
 import { resolve } from 'path'
 import { setupConsole } from './console'
 import corePlugins from './core-plugins'
-import { onWorkerMessage } from './worker'
+import { createBotWorker, createCorePluginWorker, createPluginWorker, onWorkerMessage } from './worker'
+import { readdir, stat } from 'fs/promises'
+import NeonPlugin from './plugin'
+import { loadConfig } from './config'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
 logger.level = 'debug'
@@ -26,7 +29,7 @@ export interface AccountConfig {
  */
 export interface NeonBotConfig {
     /**
-     * 用于搜索插件的目录清单
+     * 用于搜索插件的目录清单，如果为空则为配置文件同文件夹中的 plugins 文件夹
      */
     pluginSearchPath?: string[]
     /**
@@ -42,26 +45,9 @@ export interface NeonBotConfig {
      */
     accounts: { [qqid: number]: AccountConfig & ConfBot }
     /**
-     * 数据存储文件夹，如果为空则与配置文件同文件夹
+     * 数据存储文件夹，如果为空则为配置文件同文件夹中的 data 文件夹
      */
     dataDir?: string
-    /**
-     * 数据存储文件夹，如果为空则与配置文件同文件夹
-     */
-    threadRestart?: string
-}
-
-export interface PluginConfig {
-    [pluginId: string]: {
-        /** 插件已向哪些 QQ 机器人账户启用 */
-        enabledQQIds: number[]
-        /** 插件的全局共享数据，可以自由设置 */
-        savedData: any
-        /** 插件的局部共享数据，以每个机器人账户独立，可以自由设置 */
-        localSavedData: {
-            [qqId: number]: any
-        }
-    }
 }
 
 /**
@@ -83,7 +69,60 @@ export enum Platform {
 export const pluginWorkers = new Map<string, Worker>()
 export const corePluginWorkers = new Map<string, Worker>()
 export const botWorkers = new Map<number, Worker>()
-const invokeIds = new Map<string, string>()
+export const indexPath = __filename
+export let config: NeonBotConfig
+
+async function listPlugins () {
+    const result: {
+        [pluginKey: string]: {
+            id: string,
+            shortName: string,
+            name?: string,
+            pluginPath: string
+        }
+    } = {}
+    for (const subdir of config.pluginSearchPath || []) {
+        try {
+            const plugins = await readdir(subdir)
+            for (const pluginDir of plugins) {
+                try {
+                    const pluginPath = resolve(subdir, pluginDir)
+                    if (!(await stat(pluginPath)).isDirectory()) continue
+                    const plugin = require(pluginPath) as NeonPlugin
+                    if (!plugin.id) continue
+                    if (!plugin.shortName) continue
+                    result[plugin.id] = ({
+                        id: plugin.id,
+                        shortName: plugin.shortName,
+                        name: plugin.name,
+                        pluginPath: pluginPath
+                    })
+                } catch {}
+            }
+        } catch {}
+    }
+    return result
+}
+
+async function enablePlugin (qqId: number, pluginId: string) {
+    if (!botWorkers.has(qqId)) throw new Error('机器人 ' + qqId + '不存在')
+    const plugins = await listPlugins()
+    if (pluginId in plugins) {
+        const plugin = plugins[pluginId]
+        if (!pluginWorkers.has(plugin.id)) {
+            // plugin.pluginPath
+            const pluginWorker = createPluginWorker(plugin.pluginPath)
+            pluginWorkers.set(plugin.id, pluginWorker)
+        }
+        const pluginWorker = pluginWorkers.get(plugin.id)
+        pluginWorker!!.postMessage({
+            type: 'enable-plugin',
+            value: { qqId }
+        } as messages.SetPluginMessage)
+    } else {
+        throw new Error('未找到插件 ' + pluginId + ' 可供机器人 ' + qqId + ' 使用')
+    }
+}
 
 async function main () {
     if (isMainThread) {
@@ -93,126 +132,54 @@ async function main () {
         } else {
             const configPath = process.argv[process.argv.length - 1]
             logger.info('正在加载配置文件', configPath)
-            const config = require(configPath) as NeonBotConfig
+            config = require(configPath) as NeonBotConfig
             setupConsole()
             config.admins = config.admins || []
+            config.pluginSearchPath = config.pluginSearchPath || [resolve(configPath, '../plugins')]
+            config.pluginDataFile = config.pluginDataFile || resolve(configPath, '../plugins.json')
             if (config.admins.length === 0) {
                 logger.fatal('请至少在配置文件内设置一名最高管理员，否则你将无法在聊天窗口内操作机器人！')
                 process.exit(1)
             }
-            if (config.pluginDataFile) {
+            if (!config.pluginDataFile) {
                 logger.fatal('请在配置文件里设置插件数据文件路径，否则插件将无法保存自身数据！')
                 process.exit(1)
+            }
+            if (config.pluginSearchPath.length === 0) {
+                config.pluginSearchPath.push(resolve(configPath, '../plugins'))
             }
             config.dataDir = config.dataDir || resolve(configPath, '../data')
             logger.info('机器人数据文件夹：', config.dataDir)
             // Launch bots
             logger.info('正在启动机器人线程')
             for (const qqid in config.accounts) {
-                const botConfig = {
-                    ...config.accounts[qqid],
-                    data_dir: config.dataDir
-                }
-                const botWorker = new Worker(__filename, {
-                    workerData: {
-                        logger: `[NBot#${qqid}]`
-                    }
-                })
-                botWorker.postMessage({
-                    id: randonID(),
-                    type: 'deploy-worker',
-                    value: {
-                        workerType: messages.WorkerType.Bot,
-                        qqid: parseInt(qqid),
-                        config: botConfig
-                    }
-                } as messages.DeployWorkerMessage<messages.DeployBotWorkerData>)
-                botWorker.once('error', (err) => {
-                    logger.warn(`机器人 #${qqid} 线程发生错误，正在尝试重启`, err)
-                })
-                botWorker.on('message', (data: messages.BaseMessage) => {
-                    if (data.type === 'node-oicq-event') {
-                        const evt = (data as messages.NodeOICQEventMessage).value
-                        if (evt.post_type === 'message' && evt.message_type === 'private') {
-                            if (config.admins.includes(data.value.user_id)) {
-                                for (const [, plugin] of corePluginWorkers) {
-                                    plugin.postMessage(data)
-                                }
-                            }
-                        }
-                        for (const [, plugin] of pluginWorkers) {
-                            plugin.postMessage(data)
-                        }
-                    } else if (data.type === 'node-oicq-invoke') {
-                        const pluginId = invokeIds.get(data.id)!!
-                        const corePlugin = corePluginWorkers.get(pluginId)
-                        const plugin = pluginWorkers.get(pluginId)
-                        if (corePlugin) {
-                            corePlugin.postMessage(data)
-                        } else if (plugin) {
-                            plugin.postMessage(data)
-                        } else {
-                            logger.warn('未知 ID 的回调信息被传回：', data)
-                        }
-                    }
-                })
-                botWorkers.set(parseInt(qqid), botWorker)
+                botWorkers.set(parseInt(qqid), createBotWorker(parseInt(qqid)))
             }
             // Launch core plugins
             logger.info('正在启动核心插件线程')
             for (const plugin of corePlugins) {
-                const botWorker = new Worker(__filename, {
-                    workerData: {
-                        logger: `[NCP:${plugin.shortName}]`
-                    }
-                })
-                botWorker.postMessage({
-                    id: randonID(),
-                    type: 'deploy-worker',
-                    value: {
-                        workerType: messages.WorkerType.CorePlugin,
-                        pluginId: plugin.id,
-                        config: {
-                            admins: [...config.admins]
-                        }
-                    }
-                } as messages.DeployWorkerMessage<messages.DeployCorePluginWorkerData>)
-                botWorker.once('error', (err) => {
-                    logger.warn(`核心插件 ${plugin.name || plugin.shortName || plugin.id} 线程发生错误，正在尝试重启`, err)
-                })
-                botWorker.on('message', (data: messages.BaseMessage) => {
-                    if (data.type === 'node-oicq-invoke') {
-                        invokeIds.set(data.id, plugin.id)
-                        const invokeData = (data as messages.NodeOICQInvokeMessage).value
-                        const bot = botWorkers.get(invokeData.qqId)
-                        if (bot) {
-                            bot.postMessage(data)
-                        } else {
-                            botWorker.postMessage({
-                                id: data.id,
-                                type: data.type,
-                                succeed: false,
-                                value: '无法找到机器人'
-                            } as messages.BaseResult)
-                        }
-                    }
-                })
-                botWorker.once('online', () => {
-                    for (const [qqId] of botWorkers) {
-                        botWorker.postMessage({
-                            id: randonID(),
-                            type: 'enable-plugin',
-                            value: {
-                                qqId
+                corePluginWorkers.set(plugin.id, createCorePluginWorker(plugin))
+            }
+            logger.info('正在读取插件配置文件')
+            const pluginConfigs = await loadConfig()
+            const plugins = await listPlugins()
+            logger.info('正在加载已启用的插件')
+            for (const pluginId in plugins) {
+                const plugin = plugins[pluginId]
+                const pluginConfig = pluginConfigs[pluginId]
+                if (pluginConfig) {
+                    const canEnable = !!pluginConfig.enabledQQIds.find(v => [...botWorkers.keys()].includes(v))
+                    if (canEnable) {
+                        for (const qqId of pluginConfig.enabledQQIds) {
+                            if (botWorkers.has(qqId)) {
+                                await enablePlugin(qqId, plugin.id)
                             }
-                        } as messages.SetPluginMessage)
+                        }
                     }
-                })
-                corePluginWorkers.set(plugin.id, botWorker)
+                }
             }
         }
     } else {
-        logger.info('子线程已启动！')
         parentPort!!.on('message', onWorkerMessage)
     }
 }

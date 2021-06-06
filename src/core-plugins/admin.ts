@@ -10,8 +10,25 @@ let config: InitConfig
 
 function onPrivateMessage (evt: oicq.PrivateMessageEventData) {
     if (config.admins.includes(evt.user_id)) {
-        if (evt.raw_message) {
-            // evt.reply('Hello')
+        if (evt.raw_message.startsWith('.')) {
+            const args = evt.raw_message.match(/"[^"]*"|[^\s"]+/g)!!.map(v => {
+                if (v.startsWith('"') && v.endsWith('"')) {
+                    return v.substring(1, v.length - 1)
+                } else {
+                    return v
+                }
+            })
+            switch (args[0]) {
+            case '.plugins':
+            {
+                evt.reply('')
+                break
+            }
+            default:
+            {
+                evt.reply('未知的指令：' + args[0])
+            }
+            }
         }
     }
 }
