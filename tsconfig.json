@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "target": "ESNext",
+        "moduleResolution": "Node",
+        "sourceMap": true,
+        "removeComments": true,
+        "module": "CommonJS",
+        "declaration": true,
+        "outDir": "./dist"
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules"]
+}
