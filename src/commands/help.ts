@@ -22,8 +22,8 @@ const help: Command = {
             })
             const sortedCommands = [...Object.keys(commands)].sort()
             logger.info('--- 帮助 ---')
-            for (const cmdName in sortedCommands) {
-                const command = (sortedCommands as any)[cmdName] as Command
+            for (const cmdName of sortedCommands) {
+                const command = (commands as any)[cmdName] as Command
                 logger.info(`${' '.repeat(longestCommand - cmdName.length)}${cmdName} - ${command.description}`)
             }
         }

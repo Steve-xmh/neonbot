@@ -2,7 +2,7 @@ import { Command } from '.'
 import { botWorkers, logger } from '..'
 import { messages } from '../messages'
 
-const help: Command = {
+const verify: Command = {
     description: '验证滑块并登录指定账户',
     usage: 'verify (QQID) (TICKET)',
     exec (args) {
@@ -32,4 +32,4 @@ const help: Command = {
     }
 }
 
-export default help
+export default verify

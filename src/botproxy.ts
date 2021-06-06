@@ -2,7 +2,7 @@ import { EventEmitter } from 'events'
 import { parentPort } from 'worker_threads'
 import { messages } from './messages'
 import * as oicq from 'oicq'
-import { logger } from '.'
+import { PluginInfos } from '.'
 
 export const accpetableMethods = [
     'login',
@@ -160,7 +160,7 @@ export class BotProxy extends EventEmitter {
 
     /** 获取可用的插件列表，**仅核心插件可用，普通插件调用将会抛出错误** */
     getListPlugin () {
-        return this.invoke('list-plugins') as Promise<string[]>
+        return this.invoke('list-plugins') as Promise<PluginInfos>
     }
 
     /** 对机器人启用插件，**仅核心插件可用，普通插件调用将会抛出错误** */

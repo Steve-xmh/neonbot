@@ -1,5 +1,7 @@
 import verify from './verify'
 import help from './help'
+import reload from './reload'
+import stop from './stop'
 
 export interface Command {
     description: string,
@@ -9,5 +11,7 @@ export interface Command {
 
 export default {
     verify,
-    help
+    help,
+    reload,
+    stop
 }

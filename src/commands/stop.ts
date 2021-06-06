@@ -1,7 +1,7 @@
 import { Command } from '.'
 import { logger } from '..'
 
-const help: Command = {
+const stop: Command = {
     description: '关闭 NeonBot',
     usage: 'stop',
     exec (args) {
@@ -9,4 +9,4 @@ const help: Command = {
     }
 }
 
-export default help
+export default stop

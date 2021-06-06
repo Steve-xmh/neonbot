@@ -1,6 +1,6 @@
 import { Client, createClient } from 'oicq'
 import { parentPort, Worker } from 'worker_threads'
-import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
+import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath, listPlugins } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
@@ -32,7 +32,7 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
     pluginWorker.once('error', (err) => {
         logger.warn(`核心插件 ${plugin.name || plugin.shortName || plugin.id} 线程发生错误，正在尝试重启`, err)
     })
-    pluginWorker.on('message', (data: messages.BaseMessage) => {
+    pluginWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-invoke') {
             invokeIds.set(data.id, plugin.id)
             const invokeData = (data as messages.NodeOICQInvokeMessage).value
@@ -47,6 +47,13 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
                     value: '无法找到机器人'
                 } as messages.BaseResult)
             }
+        } else if (data.type === 'list-plugins') {
+            pluginWorker.postMessage({
+                id: data.id,
+                type: data.type,
+                succeed: true,
+                value: await listPlugins()
+            } as messages.BaseResult)
         }
     })
     pluginWorker.once('online', () => {
@@ -93,6 +100,10 @@ export function createBotWorker (qqId: number) {
                     for (const [, plugin] of corePluginWorkers) {
                         plugin.postMessage(data)
                     }
+                }
+            } else {
+                for (const [, plugin] of corePluginWorkers) {
+                    plugin.postMessage(data)
                 }
             }
             for (const [, plugin] of pluginWorkers) {
@@ -154,7 +165,7 @@ export function createPluginWorker (pluginPath: string) {
     return pluginWorker
 }
 
-export async function onWorkerMessage (message: messages.BaseMessage) {
+export async function onWorkerMessage (this: Worker, message: messages.BaseMessage) {
     switch (message.type) {
     case 'deploy-worker':
     {
@@ -164,7 +175,7 @@ export async function onWorkerMessage (message: messages.BaseMessage) {
             const qqid = (data as messages.DeployBotWorkerData).qqid
             const config = (data as messages.DeployBotWorkerData).config
             bot = createClient(qqid, {
-                log_level: 'off',
+                // log_level: 'off',
                 ...config
             })
             bot.on('system.online', () => {
@@ -172,6 +183,7 @@ export async function onWorkerMessage (message: messages.BaseMessage) {
             })
             bot.on('system.offline', (event) => {
                 logger.warn('账户已离线，正在重新登录')
+                bot.login()
             })
             bot.on('system.login', (event) => {
                 switch (event.sub_type) {
@@ -244,11 +256,6 @@ export async function onWorkerMessage (message: messages.BaseMessage) {
         }
         break
     }
-    case 'node-oicq-event':
-    {
-        // 在 BotProxy 内实现
-        break
-    }
     case 'node-oicq-invoke':
     {
         const data = message as messages.NodeOICQInvokeMessage
@@ -292,6 +299,12 @@ export async function onWorkerMessage (message: messages.BaseMessage) {
         } else {
             logger.warn('机器人尚未初始化，无法验证！')
         }
+        break
+    }
+    case 'list-plugins':
+    case 'node-oicq-event':
+    {
+        // 在 BotProxy 内实现
         break
     }
     default:
