@@ -98,7 +98,8 @@ export namespace messages {
         type: 'node-oicq-event'
         value: CommonEventData & {
             eventName: string,
-            reply?: (message: OICQMessage, autoEscape?: boolean) => Promise<Ret>
+            // eslint-disable-next-line camelcase
+            reply?: (message: OICQMessage, autoEscape?: boolean) => Promise<Ret<{ message_id: string }>>
         }
     }
 

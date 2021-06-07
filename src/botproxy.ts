@@ -196,6 +196,91 @@ export class BotProxy extends EventEmitter {
 
     // Node-OICQ 自带的函数，已全部异步化
 
+    /**
+     * 登录机器人账户
+     *
+     * 由于 NeonBot 会自动管理登录状态，所以除非你知道你在做什么，否则**不要调用此方法**
+     * @param password 明文或md5后的密码，重复调用时可无需传入此参数
+     */
+    login (password?: Uint8Array | string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'login',
+            arguments: [password]
+        }) as Promise<void>
+    }
+
+    /**
+     * 提交滑动验证码ticket
+     *
+     * 由于 NeonBot 会自动管理登录状态，所以除非你知道你在做什么，否则**不要调用此方法**
+     */
+    sliderLogin (ticket: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sliderLogin',
+            arguments: [ticket]
+        }) as Promise<void>
+    }
+
+    /**
+     * 先下线再关闭连接
+     *
+     * 由于 NeonBot 会自动管理登录状态，所以除非你知道你在做什么，否则**不要调用此方法**
+     */
+    logout () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'logout'
+        }) as Promise<void>
+    }
+
+    isOnline () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'isOnline'
+        }) as Promise<boolean>
+    }
+
+    /**
+     * 发验证码给密保手机，用于发短信过设备锁
+     *
+     * 由于 NeonBot 会自动管理登录状态，所以除非你知道你在做什么，否则**不要调用此方法**
+     */
+    sendSMSCode () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendSMSCode'
+        }) as Promise<void>
+    }
+
+    /**
+     * 提交收到的短信验证码
+     */
+    submitSMSCode (code: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'submitSMSCode',
+            arguments: [code]
+        }) as Promise<void>
+    }
+
+    /**
+     * 设置在线状态
+     */
+    setOnlineStatus (status: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setOnlineStatus',
+            arguments: [status]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 获取好友列表
+     *
+     * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.fl 一致
+     */
     getFriendList () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
@@ -203,6 +288,11 @@ export class BotProxy extends EventEmitter {
         }) as Promise<oicq.Ret<oicq.Client['fl']>>
     }
 
+    /**
+     * 获取陌生人列表
+     *
+     * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.sl 一致
+     */
     getStrangerList () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
@@ -210,6 +300,11 @@ export class BotProxy extends EventEmitter {
         }) as Promise<oicq.Ret<oicq.Client['sl']>>
     }
 
+    /**
+     * 获取群列表
+     *
+     * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.gl 一致
+     */
     getGroupList () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
@@ -217,22 +312,305 @@ export class BotProxy extends EventEmitter {
         }) as Promise<oicq.Ret<oicq.Client['gl']>>
     }
 
-    sendGroupMsg (groupId: number, messages: messages.OICQMessage, autoEscape: boolean = false) {
+    /**
+     * 获取群成员列表
+     */
+    getGroupMemberList (groupId: number, noCache?: boolean) {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
-            methodName: 'sendGroupMsg',
-            arguments: [groupId, messages, autoEscape]
-        }) as Promise<oicq.Ret>
+            methodName: 'getGroupMemberList',
+            arguments: [groupId, noCache]
+        }) as Promise<oicq.Ret<ReadonlyMap<number, oicq.MemberInfo>>>
     }
 
-    sendPrivateMsg (userId: number, messages: messages.OICQMessage, autoEscape: boolean = false) {
+    /**
+     * 获取陌生人资料
+     */
+    getStrangerInfo (userId: number, noCache?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getStrangerInfo',
+            arguments: [userId, noCache]
+        }) as Promise<oicq.Ret<oicq.StrangerInfo>>
+    }
+
+    /**
+     * 获取群资料
+     */
+    getGroupInfo (groupId: number, noCache?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getGroupInfo',
+            arguments: [groupId, noCache]
+        }) as Promise<oicq.Ret<oicq.GroupInfo>>
+    }
+
+    /**
+     * 获取群员资料
+     */
+    getGroupMemberInfo (groupId: number, userId: number, noCache?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getGroupMemberInfo',
+            arguments: [groupId, userId, noCache]
+        }) as Promise<oicq.Ret<oicq.MemberInfo>>
+    }
+
+    /**
+     * 私聊
+     */
+    sendPrivateMsg (userId: number, message: oicq.MessageElem | Iterable<oicq.MessageElem> | string, autoEscape?: boolean) {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendPrivateMsg',
-            arguments: [userId, messages, autoEscape]
+            arguments: [userId, message, autoEscape]
+        // eslint-disable-next-line camelcase
+        }) as Promise<oicq.Ret<{ message_id: string }>>
+    }
+
+    /**
+     * 群聊
+     */
+    sendGroupMsg (groupId: number, message: oicq.MessageElem | Iterable<oicq.MessageElem> | string, autoEscape?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendGroupMsg',
+            arguments: [groupId, message, autoEscape]
+        // eslint-disable-next-line camelcase
+        }) as Promise<oicq.Ret<{ message_id: string }>>
+    }
+
+    /**
+     * 群临时会话，大多数时候可以使用私聊达到同样效果
+     */
+    sendTempMsg (groupId: number, userId: number, message: oicq.MessageElem | Iterable<oicq.MessageElem> | string, autoEscape?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendTempMsg',
+            arguments: [groupId, userId, message, autoEscape]
+        // eslint-disable-next-line camelcase
+        }) as Promise<oicq.Ret<{ message_id: string }>>
+    }
+
+    /**
+     * 讨论组
+     */
+    sendDiscussMsg (discussId: number, message: oicq.MessageElem | Iterable<oicq.MessageElem> | string, autoEscape?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendDiscussMsg',
+            arguments: [discussId, message, autoEscape]
+        // eslint-disable-next-line camelcase
+        }) as Promise<oicq.Ret<{ message_id: string }>>
+    }
+
+    /**
+     * 撤回
+     */
+    deleteMsg (messageId: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'deleteMsg',
+            arguments: [messageId]
         }) as Promise<oicq.Ret>
     }
 
+    /**
+     * 获取一条消息(无法获取被撤回的消息)
+     */
+    getMsg (messageId: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getMsg',
+            arguments: [messageId]
+        }) as Promise<oicq.Ret<oicq.PrivateMessageEventData | oicq.GroupMessageEventData>>
+    }
+
+    /**
+     * 获取message_id往前的count条消息(包括自身)
+     * 无法获取被撤回的消息，因此返回的数量并不一定为count
+     * count默认为20，不能超过20
+     *
+     * 若要获取最新的20条消息，参考https://github.com/takayama-lily/oicq/wiki/93.%E8%A7%A3%E6%9E%90%E6%B6%88%E6%81%AFID
+     * 自行构造消息id，除群号外其余位补0
+     */
+    getChatHistory (messageId: string, count?: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getChatHistory',
+            arguments: [messageId, count]
+        }) as Promise<oicq.Ret<oicq.PrivateMessageEventData[] | oicq.GroupMessageEventData[]>>
+    }
+
+    /**
+     * 获取转发消息
+     * resid在xml消息中，需要自行解析xml获得
+     * 暂不支持套娃转发解析
+     */
+    getForwardMsg (resid: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getForwardMsg',
+            arguments: [resid]
+        }) as Promise<oicq.Ret<{
+            // eslint-disable-next-line camelcase
+            group_id?: number,
+            // eslint-disable-next-line camelcase
+            user_id: number,
+            nickname: number,
+            time: number,
+            message: oicq.MessageElem[],
+            // eslint-disable-next-line camelcase
+            raw_message: string,
+        }[]>>
+    }
+
+    /**
+     * 发群公告
+     */
+    sendGroupNotice (groupId: number, content: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendGroupNotice',
+            arguments: [groupId, content]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置群名
+     */
+    setGroupName (groupId: number, groupName: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupName',
+            arguments: [groupId, groupName]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 开启或关闭匿名
+     */
+    setGroupAnonymous (groupId: number, enable?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupAnonymous',
+            arguments: [groupId, enable]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 全员禁言
+     */
+    setGroupWholeBan (groupId: number, enable?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupWholeBan',
+            arguments: [groupId, enable]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置管理员
+     */
+    setGroupAdmin (groupId: number, userId: number, enable?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupAdmin',
+            arguments: [groupId, userId, enable]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置群头衔
+     */
+    setGroupSpecialTitle (groupId: number, userId: number, specialTitle?: string, duration?: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupSpecialTitle',
+            arguments: [groupId, userId, specialTitle, duration]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置群名片
+     */
+    setGroupCard (groupId: number, userId: number, card?: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupCard',
+            arguments: [groupId, userId, card]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 踢人(不支持批量)
+     */
+    setGroupKick (groupId: number, userId: number, rejectAddRequest?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupKick',
+            arguments: [groupId, userId, rejectAddRequest]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 禁言
+     */
+    setGroupBan (groupId: number, userId: number, duration?: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupBan',
+            arguments: [groupId, userId, duration]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 禁言匿名玩家
+     */
+    setGroupAnonymousBan (groupId: number, flag: string, duration?: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupAnonymousBan',
+            arguments: [groupId, flag, duration]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 退群
+     */
+    setGroupLeave (groupId: number, isDismiss?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupLeave',
+            arguments: [groupId, isDismiss]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 戳一戳
+     */
+    sendGroupPoke (groupId: number, userId: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendGroupPoke',
+            arguments: [groupId, userId]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 处理好友请求
+     */
+    setFriendAddRequest (flag: string, approve?: boolean, remark?: string, block?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setFriendAddRequest',
+            arguments: [flag, approve, remark, block]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 处理群请求
+     */
     setGroupAddRequest (flag: string, approve?: boolean, reason?: string, block?: boolean) {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
@@ -240,16 +618,350 @@ export class BotProxy extends EventEmitter {
             arguments: [flag, approve, reason, block]
         }) as Promise<oicq.Ret>
     }
-}
 
-for (const methodName of accpetableMethods) {
-    if (!(methodName in BotProxy.prototype)) {
-        (BotProxy.prototype as any)[methodName] = function (...args: any[]) {
-            return this.invoke('node-oicq-invoke', {
-                qqId: this.qqid,
-                methodName: methodName,
-                arguments: args
-            }) as Promise<oicq.Ret>
-        }
+    /**
+     * 获取未处理的请求
+     */
+    getSystemMsg () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getSystemMsg'
+        }) as Promise<oicq.Ret<(oicq.FriendAddEventData | oicq.GroupAddEventData | oicq.GroupInviteEventData)[]>>
+    }
+
+    /**
+     * 该接口风控
+     */
+    addGroup (groupId: number, comment?: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'addGroup',
+            arguments: [groupId, comment]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 该接口风控(只能添加群员)
+     */
+    addFriend (groupId: number, userId: number, comment?: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'addFriend',
+            arguments: [groupId, userId, comment]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 删除好友
+     */
+    deleteFriend (userId: number, block?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'deleteFriend',
+            arguments: [userId, block]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 邀请好友入群(不支持陌生人和批量)
+     */
+    inviteFriend (groupId: number, userId: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'inviteFriend',
+            arguments: [groupId, userId]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 点赞(times默认1，不支持陌生人)
+     */
+    sendLike (userId: number, times?: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendLike',
+            arguments: [userId, times]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置昵称
+     */
+    setNickname (nickname: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setNickname',
+            arguments: [nickname]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置性别(0未知 1男 2女)
+     */
+    setGender (gender: 0 | 1 | 2) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGender',
+            arguments: [gender]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置生日(20110202的形式)
+     */
+    setBirthday (birthday: string | number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setBirthday',
+            arguments: [birthday]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置个人说明
+     */
+    setDescription (description?: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setDescription',
+            arguments: [description]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置个人签名
+     */
+    setSignature (signature?: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setSignature',
+            arguments: [signature]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置个人头像
+     */
+    setPortrait (file: oicq.MediaFile) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setPortrait',
+            arguments: [file]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 设置群头像
+     */
+    setGroupPortrait (groupId: number, file: oicq.MediaFile) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'setGroupPortrait',
+            arguments: [groupId, file]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 预先上传图片以备发送
+     * 通常图片在发送时一并上传
+     * 提前上传可用于加快发送速度，实现秒发
+     */
+    preloadImages (files: Iterable<oicq.MediaFile>) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'preloadImages',
+            arguments: [files]
+        }) as Promise<oicq.Ret<string[]>>
+    }
+
+    /**
+     * 获取漫游表情
+     */
+    getRoamingStamp (noCache?: boolean) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getRoamingStamp',
+            arguments: [noCache]
+        }) as Promise<oicq.Ret<string[]>>
+    }
+
+    /**
+     * 获取群公告
+     */
+    getGroupNotice (groupId: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getGroupNotice',
+            arguments: [groupId]
+        }) as Promise<oicq.Ret<{
+            u: number, // 发布者
+            fid: string,
+            pubt: number, // 发布时间
+            msg: {
+                text: string,
+                title: string,
+                pics?: Array<{
+                    id: string,
+                    w: string,
+                    h: string,
+                }>,
+            },
+            type: number,
+            settings: {
+                // eslint-disable-next-line camelcase
+                is_show_edit_card: number,
+                // eslint-disable-next-line camelcase
+                remind_ts: number,
+                // eslint-disable-next-line camelcase
+                tip_window_type: number,
+                // eslint-disable-next-line camelcase
+                confirm_required: number
+            },
+            // eslint-disable-next-line camelcase
+            read_num: number,
+            // eslint-disable-next-line camelcase
+            is_read: number,
+            // eslint-disable-next-line camelcase
+            is_all_confirm: number
+        }[]>>
+    }
+
+    /**
+     * 支持的域名：
+     * tenpay.com | docs.qq.com | office.qq.com | connect.qq.com
+     * vip.qq.com | mail.qq.com | qzone.qq.com | gamecenter.qq.com
+     * mma.qq.com | game.qq.com | qqweb.qq.com | openmobile.qq.com
+     * qun.qq.com | ti.qq.com |
+     */
+    getCookies (domain?: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getCookies',
+            arguments: [domain]
+        }) as Promise<oicq.Ret<{ cookies: string }>>
+    }
+
+    getCsrfToken () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getCsrfToken'
+        }) as Promise<oicq.Ret<{ token: number }>>
+    }
+
+    /**
+     * 清除 image 和 record 文件夹下的缓存文件
+     */
+    cleanCache (type?: 'image' | 'record') {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'cleanCache',
+            arguments: [type]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 获取在线状态和数据统计
+     */
+    getStatus () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getStatus'
+        }) as Promise<oicq.Ret<oicq.Status>>
+    }
+
+    /**
+     * 获取登录账号信息
+     */
+    getLoginInfo () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getLoginInfo'
+        }) as Promise<oicq.Ret<oicq.LoginInfo>>
+    }
+
+    /**
+     * 获取等级信息(默认获取自己的)
+     */
+    getLevelInfo (userId?: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getLevelInfo',
+            arguments: [userId]
+        }) as Promise<oicq.Ret<any>>
+    }
+
+    // TODO: 群文件系统异步化
+    /**
+     * 进入群文件系统 **尚未完成异步化，请勿调用**
+     */
+    acquireGfs (groupId: number) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'acquireGfs',
+            arguments: [groupId]
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 重载好友列表
+     * 完成之前无法调用任何api，也不会上报任何事件
+     */
+    reloadFriendList () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'reloadFriendList'
+        }) as Promise<oicq.Ret>
+    }
+
+    /**
+     * 重载群列表
+     * 完成之前无法调用任何api，也不会上报任何事件
+     */
+    reloadGroupList () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'reloadGroupList'
+        }) as Promise<oicq.Ret>
+    }
+
+    /** @deprecated 直接关闭连接 */
+    terminate () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'terminate'
+        }) as Promise<void>
+    }
+
+    /** @deprecated 文字验证码 */
+    captchaLogin (captcha: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'captchaLogin',
+            arguments: [captcha]
+        }) as Promise<void>
+    }
+
+    /** @deprecated */
+    canSendImage () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'canSendImage'
+        }) as Promise<oicq.Ret<boolean>>
+    }
+
+    /** @deprecated */
+    canSendRecord () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'canSendRecord'
+        }) as Promise<oicq.Ret<boolean>>
+    }
+
+    /** @deprecated 获取版本信息(暂时为返回package.json中的信息) */
+    getVersionInfo () {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'getVersionInfo'
+        }) as Promise<oicq.Ret<typeof import('oicq/package.json')>>
     }
 }
