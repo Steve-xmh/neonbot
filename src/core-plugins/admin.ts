@@ -6,9 +6,34 @@
 import NeonPlugin, { InitConfig } from '../plugin'
 import * as oicq from 'oicq'
 import { BotProxy } from '../botproxy'
-import { logger } from '..'
+import * as os from 'os'
 
 let config: InitConfig
+const startTime = Date.now() / 1000
+
+function getCpuInfo () {
+    const cpus = os.cpus()
+    let idle = 0
+    let total = 0
+    for (const cpu of cpus) {
+        idle += cpu.times.idle
+        total += cpu.times.idle + cpu.times.irq + cpu.times.nice + cpu.times.sys + cpu.times.user
+    }
+    return {
+        idle,
+        total
+    }
+}
+
+function getCPUUsage (): Promise<number> {
+    return new Promise((resolve) => {
+        const startInfo = getCpuInfo()
+        setTimeout(() => {
+            const endInfo = getCpuInfo()
+            resolve(1 - ((endInfo.idle - startInfo.idle) / (endInfo.total - startInfo.total)))
+        }, 1000)
+    })
+}
 
 async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventData) {
     if (config.admins.includes(evt.user_id)) {
@@ -23,9 +48,66 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
             switch (args[0]) {
             case '.plugins':
             {
-                const plugins = await this.getListPlugin()
-                logger.debug('插件', plugins)
-                // await evt.reply(Object.keys(plugins).join('\n'))
+                if (args.length === 1) {
+                    // List plugins
+                    const plugins = await this.getListPlugin()
+                    const msgs = Object.keys(plugins).map(pluginId => `${plugins[pluginId].id} - ${plugins[pluginId].name || plugins[pluginId].shortName}`)
+                    await evt.reply('目前已搜索到的插件：\n' + msgs.join('\n'))
+                } else if (args.length === 3) {
+                    switch (args[1]) {
+                    case 'enable':
+                    {
+                        const plugins = await this.getListPlugin()
+                        if (args[2] in plugins) {
+                            await this.enablePlugin(args[2])
+                            await evt.reply('成功对本机器人启用了插件 ' + args[2])
+                        } else {
+                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                        }
+                        break
+                    }
+                    case 'disable':
+                    {
+                        const plugins = await this.getListPlugin()
+                        if (args[2] in plugins) {
+                            await this.disablePlugin(args[2])
+                            await evt.reply('成功对本机器人禁用了插件 ' + args[2])
+                        } else {
+                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                        }
+                        break
+                    }
+                    case 'reload':
+                    {
+                        const plugins = await this.getListPlugin()
+                        if (args[2] in plugins) {
+                            await this.reloadPlugin(args[2])
+                            await evt.reply('成功重启了插件 ' + args[2])
+                        } else {
+                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                        }
+                        break
+                    }
+                    }
+                } else {
+                    await evt.reply('帮助：.plugins [enable|disable|reload [PluginID]]')
+                }
+                break
+            }
+            case '.status':
+            {
+                const currentTime = Date.now() / 1000
+                const runningTime = currentTime - startTime
+                let formatedTime = ''
+                let reply = ''
+                formatedTime = Math.floor(runningTime % 60) + ' 秒' + formatedTime
+                if (runningTime / 60 >= 1) { formatedTime = Math.floor((runningTime / 60) % 60) + ' 分 ' + formatedTime }
+                if (runningTime / 3600 >= 1) { formatedTime = Math.floor((runningTime / 3600) % 24) + ' 时 ' + formatedTime }
+                if (runningTime / 86400 >= 1) { formatedTime = Math.floor(runningTime / 86400) + ' 天 ' + formatedTime }
+                reply += '框架运行时间：' + formatedTime
+                const usage = await getCPUUsage()
+                reply += '\n' + 'CPU 当前占用：' + (usage * 100).toFixed(1) + '%'
+                evt.reply(reply)
                 break
             }
             default:

@@ -1,11 +1,53 @@
 import { Client, createClient } from 'oicq'
-import { parentPort, Worker } from 'worker_threads'
-import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath, listPlugins } from '.'
+import { parentPort, TransferListItem, Worker, WorkerOptions } from 'worker_threads'
+import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
+import { loadConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
-import NeonPlugin from './plugin'
+import NeonPlugin, { disablePlugin, enablePlugin, listPlugins, shutdownPlugin } from './plugin'
 import { randonID } from './utils'
+export class NeonWorker extends Worker {
+    public ready: boolean = false
+    private waitReadyPromises: [Function, Function][] = []
+
+    constructor (stringUrl: string | URL, options?: WorkerOptions) {
+        super(stringUrl, options)
+        this.on('message', this.onReadyMessage)
+    }
+
+    postMessage (value: messages.BaseMessage | messages.BaseResult, transferList?: ReadonlyArray<TransferListItem>) {
+        if (this.ready || ('type' in value && value.type === 'deploy-worker')) {
+            Worker.prototype.postMessage.call(this, value, transferList)
+        } else {
+            this.waitReady().then(() => {
+                Worker.prototype.postMessage.call(this, value, transferList)
+            })
+        }
+    }
+
+    /**
+     * 当线程部署完毕时返回，即线程完成执行 `depoly-worker` 类型消息时
+     * 因为 Worker 不保证发送消息时的发送顺序，所以在部署事件完成之前不能处理其他操作
+     */
+    private waitReady (): Promise<void> {
+        if (this.ready) {
+            return Promise.resolve()
+        } else {
+            return new Promise((resolve, reject) => {
+                this.waitReadyPromises.push([resolve, reject])
+            })
+        }
+    }
+
+    private onReadyMessage (value: messages.BaseMessage) {
+        if (value.type === 'worker-ready') {
+            this.ready = true
+            this.off('message', this.onReadyMessage)
+            for (const [resolve] of this.waitReadyPromises) { resolve() }
+        }
+    }
+}
 
 let bot: Client
 let plugin: NeonPlugin
@@ -13,7 +55,7 @@ const botProxies = new Map<number, BotProxy>()
 const invokeIds = new Map<string, string>()
 
 export function createCorePluginWorker (plugin: NeonPlugin) {
-    const pluginWorker = new Worker(indexPath, {
+    const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
             logger: `[NCP:${plugin.shortName}]`
         }
@@ -31,6 +73,9 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
     } as messages.DeployWorkerMessage<messages.DeployCorePluginWorkerData>)
     pluginWorker.once('error', (err) => {
         logger.warn(`核心插件 ${plugin.name || plugin.shortName || plugin.id} 线程发生错误，正在尝试重启`, err)
+        setTimeout(() => {
+            corePluginWorkers.set(plugin.id, createCorePluginWorker(plugin))
+        }, 5000)
     })
     pluginWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-invoke') {
@@ -54,6 +99,57 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
                 succeed: true,
                 value: await listPlugins()
             } as messages.BaseResult)
+        } else if (data.type === 'enable-plugin') {
+            const qqid = (data as messages.SetPluginMessage).value.qqId
+            const pluginId = (data as messages.SetPluginMessage).value.pluginId
+            if (qqid && pluginId) {
+                await enablePlugin(qqid, pluginId)
+            }
+            pluginWorker.postMessage({
+                id: data.id,
+                type: data.type,
+                succeed: true,
+                value: data.value
+            } as messages.BaseResult)
+        } else if (data.type === 'disable-plugin') {
+            const qqid = (data as messages.SetPluginMessage).value.qqId
+            const pluginId = (data as messages.SetPluginMessage).value.pluginId
+            if (qqid && pluginId) {
+                if (botProxies.has(qqid)) {
+                    await disablePlugin(qqid, pluginId)
+                }
+            }
+            pluginWorker.postMessage({
+                id: data.id,
+                type: data.type,
+                succeed: true,
+                value: data.value
+            } as messages.BaseResult)
+        } else if (data.type === 'reload-plugin') {
+            const pluginId = (data as messages.SetPluginMessage).value.pluginId
+            // Post disable data to plugin for all bots
+            if (pluginId) {
+                const proxy = pluginWorkers.get(pluginId)
+                if (proxy) {
+                    const pluginConfigs = await loadConfig()
+                    if (pluginId in pluginConfigs) {
+                        const qqids = [...pluginConfigs[pluginId].enabledQQIds]
+                        for (const qqId of qqids) {
+                            await disablePlugin(qqId, pluginId)
+                        }
+                        await shutdownPlugin(pluginId)
+                        for (const qqId of qqids) {
+                            await enablePlugin(qqId, pluginId)
+                        }
+                    }
+                }
+            }
+            pluginWorker.postMessage({
+                id: data.id,
+                type: data.type,
+                succeed: true,
+                value: data.value
+            } as messages.BaseResult)
         }
     })
     pluginWorker.once('online', () => {
@@ -75,7 +171,7 @@ export function createBotWorker (qqId: number) {
         ...config.accounts[qqId],
         data_dir: config.dataDir
     }
-    const botWorker = new Worker(indexPath, {
+    const botWorker = new NeonWorker(indexPath, {
         workerData: {
             logger: `[NBot#${qqId}]`
         }
@@ -91,8 +187,11 @@ export function createBotWorker (qqId: number) {
     } as messages.DeployWorkerMessage<messages.DeployBotWorkerData>)
     botWorker.once('error', (err) => {
         logger.warn(`机器人 #${qqId} 线程发生错误，正在尝试重启`, err)
+        setTimeout(() => {
+            botWorkers.set(qqId, createBotWorker(qqId))
+        }, 5000)
     })
-    botWorker.on('message', (data: messages.BaseMessage) => {
+    botWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-event') {
             const evt = (data as messages.NodeOICQEventMessage).value
             if (evt.post_type === 'message' && evt.message_type === 'private') {
@@ -125,10 +224,10 @@ export function createBotWorker (qqId: number) {
     return botWorker
 }
 
-export function createPluginWorker (pluginPath: string) {
-    const pluginWorker = new Worker(indexPath, {
+export function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
+    const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NP:${plugin.shortName}]`
+            logger: `[NP:${shortName}]`
         }
     })
     pluginWorker.postMessage({
@@ -143,11 +242,14 @@ export function createPluginWorker (pluginPath: string) {
         }
     } as messages.DeployWorkerMessage<messages.DeployPluginWorkerData>)
     pluginWorker.once('error', (err) => {
-        logger.warn(`插件 ${plugin.name || plugin.shortName || plugin.id} 线程发生错误，正在尝试重启`, err)
+        logger.warn(`插件 ${name || shortName || pluginId} 线程发生错误，正在尝试重启`, err)
+        setTimeout(() => {
+            pluginWorkers.set(pluginId, createPluginWorker(pluginPath, pluginId, shortName, name))
+        }, 5000)
     })
     pluginWorker.on('message', (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-invoke') {
-            invokeIds.set(data.id, plugin.id)
+            invokeIds.set(data.id, pluginId)
             const invokeData = (data as messages.NodeOICQInvokeMessage).value
             const bot = botWorkers.get(invokeData.qqId)
             if (bot) {
@@ -165,7 +267,8 @@ export function createPluginWorker (pluginPath: string) {
     return pluginWorker
 }
 
-export async function onWorkerMessage (this: Worker, message: messages.BaseMessage) {
+export async function onWorkerMessage (this: NeonWorker, message: messages.BaseMessage) {
+    logger.debug(message)
     switch (message.type) {
     case 'deploy-worker':
     {
@@ -231,27 +334,60 @@ export async function onWorkerMessage (this: Worker, message: messages.BaseMessa
             }
         } else if (data.workerType === messages.WorkerType.Plugin) {
             logger.info('正在初始化插件')
+            const pluginPath = (data as messages.DeployPluginWorkerData).pluginPath
+            const config = (data as messages.DeployPluginWorkerData).config
+            config.logger = logger
+            delete require.cache[pluginPath]
+            const iplugin = require(pluginPath) as NeonPlugin
+            if (iplugin) {
+                plugin = iplugin
+                if (plugin.init) await plugin.init(config)
+                logger.info('插件初始化完毕')
+            } else {
+                logger.error('找不到核心插件', pluginPath)
+            }
         }
+        this.postMessage({
+            type: 'worker-ready'
+        } as messages.BaseMessage)
         break
     }
     case 'enable-plugin':
     {
         const qqid = (message as messages.SetPluginMessage).value.qqId
-        if (!botProxies.has(qqid)) {
-            const proxy = new BotProxy(qqid)
-            if (plugin.enable) await plugin.enable(proxy)
-            botProxies.set(qqid, proxy)
+        if (qqid) {
+            if (!botProxies.has(qqid)) {
+                const proxy = new BotProxy(qqid)
+                if (plugin.enable) await plugin.enable(proxy)
+                botProxies.set(qqid, proxy)
+            }
         }
         break
     }
     case 'disable-plugin':
     {
         const qqid = (message as messages.SetPluginMessage).value.qqId
-        if (botProxies.has(qqid)) {
-            const proxy = botProxies.get(qqid)
-            if (proxy) {
-                if (plugin.disable) await plugin.disable(proxy)
-                botProxies.delete(qqid)
+        if (qqid) {
+            if (botProxies.has(qqid)) {
+                const proxy = botProxies.get(qqid)
+                if (proxy) {
+                    if (plugin.disable) await plugin.disable(proxy)
+                    botProxies.delete(qqid)
+                }
+            }
+        }
+        break
+    }
+    case 'reload-plugin':
+    {
+        const qqid = (message as messages.SetPluginMessage).value.qqId
+        if (qqid) {
+            if (botProxies.has(qqid)) {
+                const proxy = botProxies.get(qqid)
+                if (proxy) {
+                    if (plugin.disable) await plugin.disable(proxy)
+                    botProxies.delete(qqid)
+                }
             }
         }
         break

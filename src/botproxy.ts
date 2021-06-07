@@ -2,7 +2,7 @@ import { EventEmitter } from 'events'
 import { parentPort } from 'worker_threads'
 import { messages } from './messages'
 import * as oicq from 'oicq'
-import { PluginInfos } from '.'
+import { PluginInfos } from './plugin'
 
 export const accpetableMethods = [
     'login',
@@ -80,16 +80,29 @@ export const accpetableEvents = [
     'system.login',
     'system.online',
     'system.offline',
+    'system.offline.network',
+    'system.offline.kickoff',
+    'system.offline.frozen',
+    'system.offline.device',
+    'system.offline.unknown',
     'system',
+    'message.private.friend',
+    'message.private.single',
+    'message.private.group',
+    'message.private.other',
+    'message.private',
+    'message.group.normal',
+    'message.group.anonymous',
+    'message.group.discuss',
+    'message.group',
+    'message.discuss',
+    'message',
+    'request.friend.add',
     'request.friend',
     'request.group.add',
     'request.group.invite',
     'request.group',
     'request',
-    'message.private',
-    'message.group',
-    'message.discuss',
-    'message',
     'notice.friend.increase',
     'notice.friend.decrease',
     'notice.friend.recall',
@@ -152,12 +165,6 @@ export class BotProxy extends EventEmitter {
         })
     }
 
-    private send (type: messages.EventNames, value?: any): string {
-        const msg = messages.makeMessage(type, value)
-        parentPort!!.postMessage(msg)
-        return msg.id
-    }
-
     /** 获取可用的插件列表，**仅核心插件可用，普通插件调用将会抛出错误** */
     getListPlugin () {
         return this.invoke('list-plugins') as Promise<PluginInfos>
@@ -178,6 +185,16 @@ export class BotProxy extends EventEmitter {
             pluginId
         }) as Promise<void>
     }
+
+    /** 重载插件，**仅核心插件可用，普通插件调用将会抛出错误** */
+    reloadPlugin (pluginId: string) {
+        return this.invoke('reload-plugin', {
+            qqId: this.qqid,
+            pluginId
+        }) as Promise<void>
+    }
+
+    // Node-OICQ 自带的函数，已全部异步化
 
     getFriendList () {
         return this.invoke('node-oicq-invoke', {

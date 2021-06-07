@@ -7,11 +7,14 @@
   "types": "dist/index.d.ts",
   "license": "Apache-2.0",
   "scripts": {
-    "start": "node dist/index.js",
+    "postinstall": "tsc",
+    "start": "node --enable-source-maps dist/index.js",
+    "up": "git pull&&yarn upgrade&&yarn dist",
     "dist": "tsc"
   },
   "dependencies": {
     "lockfile": "^1.0.4",
+    "typescript": "^4.3.2",
     "oicq": "*"
   },
   "devDependencies": {
@@ -24,6 +27,5 @@
     "eslint-plugin-import": "^2.22.1",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^4.2.1",
-    "typescript": "^4.3.2"
   }
 }

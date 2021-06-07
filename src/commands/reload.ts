@@ -1,7 +1,8 @@
 import { Command } from '.'
-import { botWorkers, corePluginWorkers, enablePlugin, listPlugins, logger, pluginWorkers } from '..'
+import { botWorkers, corePluginWorkers, logger, pluginWorkers } from '..'
 import { loadConfig } from '../config'
 import corePlugins from '../core-plugins'
+import { enablePlugin, listPlugins } from '../plugin'
 import { createBotWorker, createCorePluginWorker, createPluginWorker } from '../worker'
 
 const reload: Command = {
@@ -32,7 +33,7 @@ const reload: Command = {
                 if (pluginId in plugins) {
                     const pluginConfig = pluginConfigs[pluginId]
                     const plugin = plugins[pluginId]
-                    const newPluginWorker = createPluginWorker(plugin.pluginPath)
+                    const newPluginWorker = createPluginWorker(plugin.pluginPath, plugin.id, plugin.shortName, plugin.name)
                     if (pluginConfig) {
                         const canEnable = !!pluginConfig.enabledQQIds.find(v => [...botWorkers.keys()].includes(v))
                         if (canEnable) {

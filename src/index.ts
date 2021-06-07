@@ -1,17 +1,15 @@
-import { isMainThread, parentPort, Worker, workerData } from 'worker_threads'
+import { isMainThread, parentPort, workerData } from 'worker_threads'
 import * as log4js from 'log4js'
 import { ConfBot } from 'oicq'
-import { messages } from './messages'
 import { resolve } from 'path'
 import { setupConsole } from './console'
 import corePlugins from './core-plugins'
-import { createBotWorker, createCorePluginWorker, createPluginWorker, onWorkerMessage } from './worker'
-import { readdir, stat } from 'fs/promises'
-import NeonPlugin from './plugin'
+import { createBotWorker, createCorePluginWorker, NeonWorker, onWorkerMessage } from './worker'
+import { enablePlugin, listPlugins } from './plugin'
 import { loadConfig } from './config'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
-logger.level = 'debug'
+logger.level = 'info'
 
 export interface AccountConfig {
     /**
@@ -65,73 +63,11 @@ export enum Platform {
     IPad = 5
 }
 
-export const pluginWorkers = new Map<string, Worker>()
-export const corePluginWorkers = new Map<string, Worker>()
-export const botWorkers = new Map<number, Worker>()
+export const pluginWorkers = new Map<string, NeonWorker>()
+export const corePluginWorkers = new Map<string, NeonWorker>()
+export const botWorkers = new Map<number, NeonWorker>()
 export const indexPath = __filename
 export let config: NeonBotConfig
-
-export interface PluginInfos {
-    [pluginKey: string]: {
-        id: string,
-        shortName: string,
-        name?: string,
-        pluginPath: string
-    }
-}
-
-export async function listPlugins () {
-    logger.info('搜索插件文件夹中')
-    const result: PluginInfos = {}
-    for (const subdir of config.pluginSearchPath || []) {
-        try {
-            const plugins = await readdir(subdir)
-            for (const pluginDir of plugins) {
-                try {
-                    const pluginPath = resolve(subdir, pluginDir)
-                    const fullPath = require.resolve(pluginPath)
-                    logger.info(pluginPath, fullPath)
-                    if (!(await stat(pluginPath)).isDirectory()) continue
-                    delete require.cache[fullPath]
-                    const plugin = require(pluginPath) as NeonPlugin
-                    if (!plugin.id) continue
-                    if (!plugin.shortName) continue
-                    result[plugin.id] = ({
-                        id: plugin.id,
-                        shortName: plugin.shortName,
-                        name: plugin.name,
-                        pluginPath: pluginPath
-                    })
-                } catch (err) {
-                    logger.warn('读取插件时发生错误', subdir, err)
-                }
-            }
-        } catch (err) {
-            logger.warn('搜索插件文件夹时发生错误', subdir, err)
-        }
-    }
-    return result
-}
-
-export async function enablePlugin (qqId: number, pluginId: string) {
-    if (!botWorkers.has(qqId)) throw new Error('机器人 ' + qqId + '不存在')
-    const plugins = await listPlugins()
-    if (pluginId in plugins) {
-        const plugin = plugins[pluginId]
-        if (!pluginWorkers.has(plugin.id)) {
-            // plugin.pluginPath
-            const pluginWorker = createPluginWorker(plugin.pluginPath)
-            pluginWorkers.set(plugin.id, pluginWorker)
-        }
-        const pluginWorker = pluginWorkers.get(plugin.id)
-        pluginWorker!!.postMessage({
-            type: 'enable-plugin',
-            value: { qqId }
-        } as messages.SetPluginMessage)
-    } else {
-        throw new Error('未找到插件 ' + pluginId + ' 可供机器人 ' + qqId + ' 使用')
-    }
-}
 
 async function main () {
     if (isMainThread) {

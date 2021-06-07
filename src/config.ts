@@ -3,8 +3,8 @@
  * 用于读写插件配置文件的东西
  */
 
-import { F_OK, R_OK } from 'constants'
-import { access, readFile, stat, writeFile } from 'fs/promises'
+import { constants } from 'fs'
+import { access, readFile, writeFile } from 'fs/promises'
 import { lock, unlock } from 'lockfile'
 import { config as neonbotConfig } from '.'
 
@@ -21,7 +21,7 @@ export interface PluginConfig {
     }
 }
 
-let config: PluginConfig
+let config: PluginConfig = {}
 
 export function saveConfig () {
     return new Promise<void>((resolve, reject) => {
@@ -61,7 +61,7 @@ export function loadConfig () {
             if (err) {
                 reject(err)
             } else {
-                access(neonbotConfig.pluginDataFile!!, F_OK | R_OK)
+                access(neonbotConfig.pluginDataFile!!, constants.F_OK | constants.R_OK)
                     .catch(() => {
                         unlock(lockFile, (err) => {
                             if (err) {
@@ -86,7 +86,8 @@ export function loadConfig () {
                                 reject(err)
                             } else {
                                 try {
-                                    resolve(JSON.parse(data || '{}'))
+                                    config = JSON.parse(data || '{}')
+                                    resolve(config)
                                 } catch (err) {
                                     reject(err)
                                 }

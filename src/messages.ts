@@ -12,11 +12,13 @@ import { InitConfig } from './plugin'
 /** 消息类型命名空间 */
 export namespace messages {
 
-    export type EventNames = 'listen-event-message' |
+    export type EventNames =
         'deploy-worker' |
+        'worker-ready' |
         'list-plugins' |
         'enable-plugin' |
         'disable-plugin' |
+        'reload-plugin' |
         'verify-message' |
         'node-oicq-event' |
         'node-oicq-invoke' |
@@ -68,7 +70,8 @@ export namespace messages {
 
     export interface DeployPluginWorkerData extends DeployWorkerData {
         workerType: WorkerType.Plugin,
-        pluginPath: string
+        pluginPath: string,
+        config: InitConfig
     }
 
     export interface DeployCorePluginWorkerData extends DeployWorkerData {
@@ -109,9 +112,9 @@ export namespace messages {
     }
 
     export interface SetPluginMessage extends BaseMessage {
-        type: 'enable-plugin' | 'disable-plugin'
+        type: 'enable-plugin' | 'disable-plugin' | 'reload-plugin'
         value: {
-            qqId: number,
+            qqId?: number,
             pluginId?: string
         }
     }
