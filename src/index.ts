@@ -105,6 +105,7 @@ async function main () {
             for (const plugin of corePlugins) {
                 corePluginWorkers.set(plugin.id, createCorePluginWorker(plugin))
             }
+            // Launch user plugins
             logger.info('正在读取插件配置文件')
             const pluginConfigs = await loadConfig()
             const plugins = await listPlugins()

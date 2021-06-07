@@ -43,11 +43,11 @@ export default interface NeonPlugin {
      */
     init?: (config: InitConfig) => Promise<void>
     /**
-     * 插件在一个机器人上被启用时调用，此时可以处理相关的机器人操作
+     * 插件在一个机器人上被启用或重载后调用，此时可以处理相关的机器人操作
      */
     enable?: (bot: BotProxy) => Promise<void>
     /**
-     * 插件在一个机器人上被禁用时调用，此时可以处理相关的机器人操作
+     * 插件在一个机器人上被禁用或重载前调用，此时可以处理相关的机器人操作
      *
      * 为了良好的代码习惯，请在此解除挂载一系列先前挂载的事件
      */
@@ -68,7 +68,6 @@ export interface PluginInfos {
 }
 
 export async function listPlugins () {
-    logger.info('搜索插件文件夹中')
     const result: PluginInfos = {}
     for (const subdir of config.pluginSearchPath || []) {
         try {
@@ -77,7 +76,6 @@ export async function listPlugins () {
                 try {
                     const pluginPath = resolve(subdir, pluginDir)
                     const fullPath = require.resolve(pluginPath)
-                    logger.info(pluginPath, fullPath)
                     if (!(await stat(pluginPath)).isDirectory()) continue
                     delete require.cache[fullPath]
                     const plugin = require(pluginPath) as NeonPlugin

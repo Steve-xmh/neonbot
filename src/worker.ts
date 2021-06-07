@@ -49,6 +49,68 @@ export class NeonWorker extends Worker {
     }
 }
 
+async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) {
+    if (data.type === 'list-plugins') {
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: await listPlugins()
+        } as messages.BaseResult)
+    } else if (data.type === 'enable-plugin') {
+        const qqid = (data as messages.SetPluginMessage).value.qqId
+        const pluginId = (data as messages.SetPluginMessage).value.pluginId
+        if (qqid && pluginId) {
+            await enablePlugin(qqid, pluginId)
+        }
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: data.value
+        } as messages.BaseResult)
+    } else if (data.type === 'disable-plugin') {
+        const qqid = (data as messages.SetPluginMessage).value.qqId
+        const pluginId = (data as messages.SetPluginMessage).value.pluginId
+        if (qqid && pluginId) {
+            if (botProxies.has(qqid)) {
+                await disablePlugin(qqid, pluginId)
+            }
+        }
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: data.value
+        } as messages.BaseResult)
+    } else if (data.type === 'reload-plugin') {
+        const pluginId = (data as messages.SetPluginMessage).value.pluginId
+        // Post disable data to plugin for all bots
+        if (pluginId) {
+            const proxy = pluginWorkers.get(pluginId)
+            if (proxy) {
+                const pluginConfigs = await loadConfig()
+                if (pluginId in pluginConfigs) {
+                    const qqids = [...pluginConfigs[pluginId].enabledQQIds]
+                    for (const qqId of qqids) {
+                        await disablePlugin(qqId, pluginId)
+                    }
+                    await shutdownPlugin(pluginId)
+                    for (const qqId of qqids) {
+                        await enablePlugin(qqId, pluginId)
+                    }
+                }
+            }
+        }
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: data.value
+        } as messages.BaseResult)
+    }
+}
+
 let bot: Client
 let plugin: NeonPlugin
 const botProxies = new Map<number, BotProxy>()
@@ -92,64 +154,8 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
                     value: '无法找到机器人'
                 } as messages.BaseResult)
             }
-        } else if (data.type === 'list-plugins') {
-            pluginWorker.postMessage({
-                id: data.id,
-                type: data.type,
-                succeed: true,
-                value: await listPlugins()
-            } as messages.BaseResult)
-        } else if (data.type === 'enable-plugin') {
-            const qqid = (data as messages.SetPluginMessage).value.qqId
-            const pluginId = (data as messages.SetPluginMessage).value.pluginId
-            if (qqid && pluginId) {
-                await enablePlugin(qqid, pluginId)
-            }
-            pluginWorker.postMessage({
-                id: data.id,
-                type: data.type,
-                succeed: true,
-                value: data.value
-            } as messages.BaseResult)
-        } else if (data.type === 'disable-plugin') {
-            const qqid = (data as messages.SetPluginMessage).value.qqId
-            const pluginId = (data as messages.SetPluginMessage).value.pluginId
-            if (qqid && pluginId) {
-                if (botProxies.has(qqid)) {
-                    await disablePlugin(qqid, pluginId)
-                }
-            }
-            pluginWorker.postMessage({
-                id: data.id,
-                type: data.type,
-                succeed: true,
-                value: data.value
-            } as messages.BaseResult)
-        } else if (data.type === 'reload-plugin') {
-            const pluginId = (data as messages.SetPluginMessage).value.pluginId
-            // Post disable data to plugin for all bots
-            if (pluginId) {
-                const proxy = pluginWorkers.get(pluginId)
-                if (proxy) {
-                    const pluginConfigs = await loadConfig()
-                    if (pluginId in pluginConfigs) {
-                        const qqids = [...pluginConfigs[pluginId].enabledQQIds]
-                        for (const qqId of qqids) {
-                            await disablePlugin(qqId, pluginId)
-                        }
-                        await shutdownPlugin(pluginId)
-                        for (const qqId of qqids) {
-                            await enablePlugin(qqId, pluginId)
-                        }
-                    }
-                }
-            }
-            pluginWorker.postMessage({
-                id: data.id,
-                type: data.type,
-                succeed: true,
-                value: data.value
-            } as messages.BaseResult)
+        } else {
+            await onCoreTypeMessage.call(pluginWorker, data)
         }
     })
     pluginWorker.once('online', () => {
@@ -161,6 +167,51 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
                     qqId
                 }
             } as messages.SetPluginMessage)
+        }
+    })
+    return pluginWorker
+}
+
+export function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
+    const pluginWorker = new NeonWorker(indexPath, {
+        workerData: {
+            logger: `[NP:${shortName}]`
+        }
+    })
+    pluginWorker.postMessage({
+        id: randonID(),
+        type: 'deploy-worker',
+        value: {
+            workerType: messages.WorkerType.Plugin,
+            pluginPath: pluginPath,
+            config: {
+                admins: [...config.admins]
+            }
+        }
+    } as messages.DeployWorkerMessage<messages.DeployPluginWorkerData>)
+    pluginWorker.once('error', (err) => {
+        logger.warn(`插件 ${name || shortName || pluginId} 线程发生错误，正在尝试重启`, err)
+        setTimeout(() => {
+            pluginWorkers.set(pluginId, createPluginWorker(pluginPath, pluginId, shortName, name))
+        }, 5000)
+    })
+    pluginWorker.on('message', async (data: messages.BaseMessage) => {
+        if (data.type === 'node-oicq-invoke') {
+            invokeIds.set(data.id, pluginId)
+            const invokeData = (data as messages.NodeOICQInvokeMessage).value
+            const bot = botWorkers.get(invokeData.qqId)
+            if (bot) {
+                bot.postMessage(data)
+            } else {
+                pluginWorker.postMessage({
+                    id: data.id,
+                    type: data.type,
+                    succeed: false,
+                    value: '无法找到机器人'
+                } as messages.BaseResult)
+            }
+        } else {
+            await onCoreTypeMessage.call(pluginWorker, data)
         }
     })
     return pluginWorker
@@ -222,49 +273,6 @@ export function createBotWorker (qqId: number) {
         }
     })
     return botWorker
-}
-
-export function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
-    const pluginWorker = new NeonWorker(indexPath, {
-        workerData: {
-            logger: `[NP:${shortName}]`
-        }
-    })
-    pluginWorker.postMessage({
-        id: randonID(),
-        type: 'deploy-worker',
-        value: {
-            workerType: messages.WorkerType.Plugin,
-            pluginPath: pluginPath,
-            config: {
-                admins: [...config.admins]
-            }
-        }
-    } as messages.DeployWorkerMessage<messages.DeployPluginWorkerData>)
-    pluginWorker.once('error', (err) => {
-        logger.warn(`插件 ${name || shortName || pluginId} 线程发生错误，正在尝试重启`, err)
-        setTimeout(() => {
-            pluginWorkers.set(pluginId, createPluginWorker(pluginPath, pluginId, shortName, name))
-        }, 5000)
-    })
-    pluginWorker.on('message', (data: messages.BaseMessage) => {
-        if (data.type === 'node-oicq-invoke') {
-            invokeIds.set(data.id, pluginId)
-            const invokeData = (data as messages.NodeOICQInvokeMessage).value
-            const bot = botWorkers.get(invokeData.qqId)
-            if (bot) {
-                bot.postMessage(data)
-            } else {
-                pluginWorker.postMessage({
-                    id: data.id,
-                    type: data.type,
-                    succeed: false,
-                    value: '无法找到机器人'
-                } as messages.BaseResult)
-            }
-        }
-    })
-    return pluginWorker
 }
 
 export async function onWorkerMessage (this: NeonWorker, message: messages.BaseMessage) {
@@ -374,6 +382,9 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                     if (plugin.disable) await plugin.disable(proxy)
                     botProxies.delete(qqid)
                 }
+            }
+            if (botProxies.size === 0) {
+                if (plugin.uninit) await plugin.uninit()
             }
         }
         break

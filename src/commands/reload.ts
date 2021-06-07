@@ -7,7 +7,7 @@ import { createBotWorker, createCorePluginWorker, createPluginWorker } from '../
 
 const reload: Command = {
     description: '重启插件或机器人',
-    usage: 'restart (bot|plugin|coreplugin) PLUGIN_OR_BOT_ID',
+    usage: 'reload (bot|plugin|coreplugin) PLUGIN_OR_BOT_ID',
     async exec (args) {
         if (args.length !== 3) {
             return logger.info('指令帮助：reload (bot|plugin|coreplugin) PLUGIN_OR_BOT_ID')

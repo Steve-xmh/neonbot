@@ -157,7 +157,7 @@ export class BotProxy extends EventEmitter {
         })
     }
 
-    private invoke (type: messages.EventNames, value?: any): Promise<any> {
+    invoke (type: messages.EventNames, value?: any): Promise<any> {
         return new Promise((resolve, reject) => {
             const msg = messages.makeMessage(type, value)
             this.awaitingPromises.set(msg.id, [resolve, reject])
@@ -165,12 +165,12 @@ export class BotProxy extends EventEmitter {
         })
     }
 
-    /** 获取可用的插件列表，**仅核心插件可用，普通插件调用将会抛出错误** */
+    /** 获取可用的插件列表 */
     getListPlugin () {
         return this.invoke('list-plugins') as Promise<PluginInfos>
     }
 
-    /** 对机器人启用插件，**仅核心插件可用，普通插件调用将会抛出错误** */
+    /** 对机器人启用插件 */
     enablePlugin (pluginId: string) {
         return this.invoke('enable-plugin', {
             qqId: this.qqid,
@@ -178,7 +178,7 @@ export class BotProxy extends EventEmitter {
         }) as Promise<void>
     }
 
-    /** 禁用插件，**仅核心插件可用，普通插件调用将会抛出错误** */
+    /** 禁用插件 */
     disablePlugin (pluginId: string) {
         return this.invoke('disable-plugin', {
             qqId: this.qqid,
@@ -186,7 +186,7 @@ export class BotProxy extends EventEmitter {
         }) as Promise<void>
     }
 
-    /** 重载插件，**仅核心插件可用，普通插件调用将会抛出错误** */
+    /** 重载插件 */
     reloadPlugin (pluginId: string) {
         return this.invoke('reload-plugin', {
             qqId: this.qqid,
@@ -239,5 +239,17 @@ export class BotProxy extends EventEmitter {
             methodName: 'setGroupAddRequest',
             arguments: [flag, approve, reason, block]
         }) as Promise<oicq.Ret>
+    }
+}
+
+for (const methodName of accpetableMethods) {
+    if (!(methodName in BotProxy.prototype)) {
+        (BotProxy.prototype as any)[methodName] = function (...args: any[]) {
+            return this.invoke('node-oicq-invoke', {
+                qqId: this.qqid,
+                methodName: methodName,
+                arguments: args
+            }) as Promise<oicq.Ret>
+        }
     }
 }

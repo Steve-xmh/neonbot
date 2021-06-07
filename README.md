@@ -26,13 +26,14 @@ yarn up # 使用 git pull 拉取仓库新源代码，然后构建
 ```
 
 ## 配置文件
-配置文件可以参考 `src/index.ts` 中对配置文件的类型定义进行设置，将会使用 `require` 函数来加载配置文件，故可以为 `json` 或 `js`  
+配置文件可以参考 `src/index.ts` 中对配置文件的类型定义进行设置，将会使用 `require` 函数来加载配置文件，故可以为 `json` 文件或 `js` 脚本  
 作者个人喜好用 `neonbot.config.js` 或 `neonbot.config.json` 作为配置文件的名称。
 
 ## 从 abot 迁移
 迁移插件其实非常简单，目前只需要：
 
 - 在导出中加个 `id` 和 `shortName` 字段用于记录输出/插件标识
+- **去掉你的所有同步访问 `Bot` 字段和函数，全部改用异步调用（非常重要，因为多线程操作是注定异步的），详情可以查阅 `src/botproxy.ts` 中的 `BotProxy` 类**
 - 将导出中的 `activate` 改名为 `enable`
 - 将导出中的 `deactivate` 改名为 `disable`
 

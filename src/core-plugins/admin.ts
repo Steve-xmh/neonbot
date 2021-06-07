@@ -88,6 +88,17 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         }
                         break
                     }
+                    case 'restart':
+                    {
+                        const plugins = await this.getListPlugin()
+                        if (args[2] in plugins) {
+                            await this.reloadPlugin(args[2])
+                            await evt.reply('成功重启了插件 ' + args[2])
+                        } else {
+                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                        }
+                        break
+                    }
                     }
                 } else {
                     await evt.reply('帮助：.plugins [enable|disable|reload [PluginID]]')
@@ -108,6 +119,20 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                 const usage = await getCPUUsage()
                 reply += '\n' + 'CPU 当前占用：' + (usage * 100).toFixed(1) + '%'
                 evt.reply(reply)
+                break
+            }
+            case '.help':
+            {
+                await evt.reply([
+                    '--- NeonBot 使用帮助 ---',
+                    '.plugins - 列出所有可用插件',
+                    '.plugins enable (插件ID) - 对本机器人账户启用指定插件',
+                    '.plugins disable (插件ID) - 对本机器人账户禁用指定插件',
+                    '.plugins reload (插件ID) - 对所本机器人重载指定插件',
+                    '.plugins restart (插件ID) - 对所有机器人重新启动指定插件',
+                    '.status - 输出当前框架运行状态',
+                    '.help - 显示此帮助'
+                ].join('\n'))
                 break
             }
             default:
