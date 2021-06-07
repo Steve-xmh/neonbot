@@ -1,0 +1,31 @@
+{
+  "name": "neonbot",
+  "version": "0.0.1",
+  "main": "neonbot.js",
+  "repository": "git@github.com:Steve-xmh/neonbot.git",
+  "author": "SteveXMH <stevexmh@qq.com>",
+  "types": "dist/index.d.ts",
+  "license": "Apache-2.0",
+  "scripts": {
+    "postinstall": "tsc",
+    "start": "node --enable-source-maps dist/index.js",
+    "up": "git pull&&yarn upgrade&&yarn dist",
+    "dist": "tsc"
+  },
+  "dependencies": {
+    "lockfile": "^1.0.4",
+    "oicq": "*",
+    "typescript": "^4.3.2"
+  },
+  "devDependencies": {
+    "@types/lockfile": "^1.0.1",
+    "@types/node": "^15.6.1",
+    "@typescript-eslint/eslint-plugin": "^4.26.0",
+    "@typescript-eslint/parser": "^4.26.0",
+    "eslint": "^7.12.1",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^4.2.1"
+  }
+}

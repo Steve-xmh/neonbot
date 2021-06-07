@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"strict": true,
+		"target": "ESNext",
+		"moduleResolution": "Node",
+		"sourceMap": true,
+		"removeComments": true,
+		"module": "CommonJS",
+		"declaration": true,
+		"resolveJsonModule": true,
+		"outDir": "./dist"
+	},
+	"exclude": ["node_modules"],
+	"include": ["src/**/*"]
+}
