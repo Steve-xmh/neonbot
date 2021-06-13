@@ -2,6 +2,7 @@ import { MessagePort } from 'worker_threads'
 import * as oicq from 'oicq'
 import { messages } from './messages'
 import { logger } from '.'
+import EventEmitter = require('events')
 
 /**
  * 在机器人线程里运行的代理群文件对象
@@ -10,35 +11,42 @@ import { logger } from '.'
  *
  * 插件禁用或不再需要使用此函数时，需要调用 `GFSProxy.close` 以关闭通讯接口，否则会造成内存泄漏。
  */
-export class GFSProxy {
+export class GFSProxy extends EventEmitter {
     private awaitingPromises = new Map<string, [(result: any) => void, (reason: any) => void]>()
+    private portReady = Symbol('port-ready')
+    private port?: MessagePort
 
     constructor (
         /** 群号 */
         public readonly gid: number,
-        private readonly port: MessagePort
+        portReciever: Promise<MessagePort>
     ) {
+        super()
         process.once('uncaughtException', () => {
             this.close() // 出错时关闭通讯接口
         })
         process.once('beforeExit', () => {
             this.close() // 退出时关闭通讯接口
         })
-        this.port.on('message', (value) => {
-            logger.debug(value)
-            const data = value as messages.BaseMessage
-            if (this.awaitingPromises.has(data.id)) {
-                const result = data as unknown as messages.BaseResult
-                const [resolve, reject] = this.awaitingPromises.get(data.id)!!
-                this.awaitingPromises.delete(data.id)
-                if (result.succeed) {
-                    resolve(result.value)
+        portReciever.then((port) => {
+            this.port = port
+            this.port.on('message', (value) => {
+                logger.debug(value)
+                const data = value as messages.BaseMessage
+                if (this.awaitingPromises.has(data.id)) {
+                    const result = data as unknown as messages.BaseResult
+                    const [resolve, reject] = this.awaitingPromises.get(data.id)!!
+                    this.awaitingPromises.delete(data.id)
+                    if (result.succeed) {
+                        resolve(result.value)
+                    } else {
+                        reject(result.value)
+                    }
                 } else {
-                    reject(result.value)
+                    logger.warn('接收到未知的 GFS 消息：', value)
                 }
-            } else {
-                logger.warn('接收到未知的 GFS 消息：', value)
-            }
+            })
+            this.emit(this.portReady)
         })
     }
 
@@ -50,11 +58,21 @@ export class GFSProxy {
      * @returns 根据消息类型所传回的实际数据
      */
     invoke (type: messages.EventNames, value?: any): Promise<any> {
-        return new Promise((resolve, reject) => {
-            const msg = messages.makeMessage(type, value)
-            this.awaitingPromises.set(msg.id, [resolve, reject])
-            this.port.postMessage(msg)
-        })
+        if (this.port) {
+            return new Promise((resolve, reject) => {
+                const msg = messages.makeMessage(type, value)
+                this.awaitingPromises.set(msg.id, [resolve, reject])
+                this.port!!.postMessage(msg)
+            })
+        } else {
+            return new Promise((resolve, reject) => {
+                this.once(this.portReady, () => {
+                    const msg = messages.makeMessage(type, value)
+                    this.awaitingPromises.set(msg.id, [resolve, reject])
+                    this.port!!.postMessage(msg)
+                })
+            })
+        }
     }
 
     /** 查看文件属性(尽量不要对目录使用此方法) */
@@ -145,6 +163,6 @@ export class GFSProxy {
      * `GFSProxy` 的通讯一般由 NeonBot 自行管理，插件无需调用此函数
      */
     close () {
-        this.port.close()
+        this.port?.close()
     }
 }

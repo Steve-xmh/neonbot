@@ -12,7 +12,6 @@ import { messages } from './messages'
 import { readdir, stat } from 'fs/promises'
 import { resolve } from 'path'
 import { loadConfig, saveConfig } from './config'
-import { randonID } from './utils'
 
 /**
  * 一个初始化时会被传递的配置对象

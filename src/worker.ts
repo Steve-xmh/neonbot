@@ -428,26 +428,17 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 const data = message as messages.NodeOICQInvokeMessage
                 const invokeData = data.value
                 if (typeof (bot as any)[invokeData.methodName] === 'function') {
-                    const result = (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
-                    if (result instanceof Promise) {
-                        try {
-                            port.postMessage({
-                                id: data.id,
-                                succeed: true,
-                                value: await result
-                            } as messages.BaseResult)
-                        } catch (err) {
-                            port.postMessage({
-                                id: data.id,
-                                succeed: false,
-                                value: err
-                            } as messages.BaseResult)
-                        }
-                    } else {
+                    try {
                         port.postMessage({
                             id: data.id,
                             succeed: true,
-                            value: result
+                            value: await (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
+                        } as messages.BaseResult)
+                    } catch (err) {
+                        port.postMessage({
+                            id: data.id,
+                            succeed: false,
+                            value: err
                         } as messages.BaseResult)
                     }
                 } else {

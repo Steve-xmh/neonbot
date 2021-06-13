@@ -125,7 +125,7 @@ export const accpetableEvents = [
     'notice'
 ]
 
-export class BotProxyError extends Error {}
+export class BotProxyError extends Error { }
 
 /**
  * 在机器人线程里运行的代理机器人，将会转换 oicq 的各类方法调用及事件触发并发送至主线程处理
@@ -409,7 +409,7 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'sendPrivateMsg',
             arguments: [userId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -421,7 +421,7 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'sendGroupMsg',
             arguments: [groupId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -433,7 +433,7 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'sendTempMsg',
             arguments: [groupId, userId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -445,7 +445,7 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'sendDiscussMsg',
             arguments: [discussId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -935,19 +935,15 @@ export class BotProxy extends EventEmitter {
         }) as Promise<oicq.Ret<any>>
     }
 
-    // TODO: 群文件系统异步化
     /**
-     * 进入群文件系统 **尚未完成异步化，请勿调用**
+     * 进入群文件系统
      */
-    async acquireGfs (groupId: number) {
-        const ret = await (this.invoke('node-oicq-invoke', {
-            qqId: this.qqid,
-            methodName: 'acquireGfs',
-            arguments: [groupId]
+    acquireGfs (groupId: number) {
+        return new GFSProxy(groupId, (this.invoke('node-oicq-gfs-aquire', {
+            groupId
         }) as Promise<{
             port: MessagePort
-        }>)
-        return new GFSProxy(groupId, ret.port)
+        }>).then(v => v.port))
     }
 
     /**
