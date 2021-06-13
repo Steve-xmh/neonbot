@@ -464,20 +464,20 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                             const invokeData = data.value
                             if (typeof (gfsObj.gfs as any)[invokeData.methodName] === 'function') {
                                 try {
-                                    port.postMessage({
+                                    gfsObj.port.postMessage({
                                         id: data.id,
                                         succeed: true,
                                         value: await (gfsObj.gfs as any)[invokeData.methodName](...(invokeData.arguments || []))
                                     } as messages.BaseResult)
                                 } catch (err) {
-                                    port.postMessage({
+                                    gfsObj.port.postMessage({
                                         id: data.id,
                                         succeed: false,
                                         value: err
                                     } as messages.BaseResult)
                                 }
                             } else {
-                                port.postMessage({
+                                gfsObj.port.postMessage({
                                     id: data.id,
                                     succeed: false,
                                     value: `找不到 ${invokeData.methodName} 调用方法`

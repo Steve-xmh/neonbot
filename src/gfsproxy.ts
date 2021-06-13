@@ -30,9 +30,10 @@ export class GFSProxy extends EventEmitter {
             this.close() // 退出时关闭通讯接口
         })
         portReciever.then((port) => {
+            logger.debug('GFSProxy', '接收到通讯接口！', port)
             this.port = port
             this.port.on('message', (value) => {
-                logger.debug(value)
+                logger.debug('GFSProxy <-', value)
                 const data = value as messages.BaseMessage
                 if (this.awaitingPromises.has(data.id)) {
                     const result = data as unknown as messages.BaseResult
@@ -64,6 +65,7 @@ export class GFSProxy extends EventEmitter {
         } else if (this.port) {
             return new Promise((resolve, reject) => {
                 const msg = messages.makeMessage(type, value)
+                logger.debug('GFSProxy ->', msg)
                 this.awaitingPromises.set(msg.id, [resolve, reject])
                 this.port!!.postMessage(msg)
             })
@@ -71,6 +73,7 @@ export class GFSProxy extends EventEmitter {
             return new Promise((resolve, reject) => {
                 this.once(this.portReady, () => {
                     const msg = messages.makeMessage(type, value)
+                    logger.debug('GFSProxy ->', msg)
                     this.awaitingPromises.set(msg.id, [resolve, reject])
                     this.port!!.postMessage(msg)
                 })
