@@ -939,16 +939,15 @@ export class BotProxy extends EventEmitter {
     /**
      * 进入群文件系统 **尚未完成异步化，请勿调用**
      */
-    acquireGfs (groupId: number) {
-        return (this.invoke('node-oicq-invoke', {
+    async acquireGfs (groupId: number) {
+        const ret = await (this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'acquireGfs',
             arguments: [groupId]
         }) as Promise<{
             port: MessagePort
-        }>).then(ret => {
-            return new GFSProxy(groupId, ret.port)
-        })
+        }>)
+        return new GFSProxy(groupId, ret.port)
     }
 
     /**
