@@ -146,6 +146,7 @@ export class BotProxy extends EventEmitter {
     password_md5 = Buffer.alloc(0)
     passwordMd5 = Buffer.alloc(0)
 
+    online = false
     nickname = ''
     sex: oicq.Gender = 'unknown'
     age = 0;
@@ -220,6 +221,7 @@ export class BotProxy extends EventEmitter {
                 this.passwordMd5 = this.password_md5 = Buffer.from(syncData.password_md5)
                 this.onlineStatus = this.online_status = syncData.online_status
                 this.nickname = syncData.nickname
+                this.online = syncData.online
                 this.sex = syncData.sex
                 this.uin = syncData.uin
                 this.fl = syncData.fl
@@ -248,9 +250,11 @@ export class BotProxy extends EventEmitter {
         switch (evt.eventName) {
         case 'system.online':
             this.getStatus()
+            this.online = true
             break
         case 'system.offline':
             this.onlineStatus = this.online_status = 0
+            this.online = false
             break
         case 'notice.friend.increase':
             this.getFriendList()
@@ -396,10 +400,7 @@ export class BotProxy extends EventEmitter {
     }
 
     isOnline () {
-        return this.invoke('node-oicq-invoke', {
-            qqId: this.qqid,
-            methodName: 'isOnline'
-        }) as Promise<boolean>
+        return this.online
     }
 
     /**

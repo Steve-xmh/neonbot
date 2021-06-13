@@ -524,6 +524,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 uin: bot?.uin,
                 password_md5: new Uint8Array(bot?.password_md5),
                 nickname: bot?.nickname,
+                online: bot?.isOnline(),
                 sex: bot?.sex,
                 online_status: bot?.online_status,
                 fl: bot?.fl,

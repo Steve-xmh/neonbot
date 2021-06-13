@@ -133,6 +133,8 @@ export namespace messages {
             /** 在线状态 */
             // eslint-disable-next-line camelcase
             readonly online_status: number;
+            /** 是否在线 */
+            readonly online: boolean;
             /** 好友列表 */
             readonly fl: Map<number, FriendInfo>;
             /** 陌生人列表 */
