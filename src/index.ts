@@ -9,7 +9,7 @@ import { enablePlugin, listPlugins } from './plugin'
 import { loadConfig } from './config'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
-logger.level = 'info'
+logger.level = 'debug'
 
 export interface AccountConfig {
     /**
@@ -18,6 +18,7 @@ export interface AccountConfig {
      */
     password: string | Buffer,
     /** 需要让机器人模拟运行的设备环境，默认为 `Platform.AndroidPhone` */
+    // eslint-disable-next-line no-use-before-define
     platform?: Platform,
 }
 
@@ -52,14 +53,19 @@ export interface NeonBotConfig {
  */
 export enum Platform {
     /** 安卓手机设备（默认） */
+    // eslint-disable-next-line no-unused-vars
     AndroidPhone = 1,
     /** 安卓平板设备 */
+    // eslint-disable-next-line no-unused-vars
     AndroidTablet = 2,
     /** 安卓手表设备 */
+    // eslint-disable-next-line no-unused-vars
     AndroidWatch = 3,
     /** 苹果电脑系统 */
+    // eslint-disable-next-line no-unused-vars
     MacOS = 4,
     /** 苹果平板设备 */
+    // eslint-disable-next-line no-unused-vars
     IPad = 5
 }
 

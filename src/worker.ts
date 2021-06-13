@@ -1,5 +1,5 @@
-import { Client, createClient } from 'oicq'
-import { parentPort, TransferListItem, Worker, WorkerOptions } from 'worker_threads'
+import { Client, createClient, Gfs } from 'oicq'
+import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
 import { loadConfig } from './config'
@@ -111,9 +111,16 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
     }
 }
 
+interface BotGFSSetItem {
+    gfs: Gfs
+    port: MessagePort
+}
+
 let bot: Client
 let plugin: NeonPlugin
 const botProxies = new Map<number, BotProxy>()
+const pluginPorts = new Set<MessagePort>()
+const botGfses = new Set<BotGFSSetItem>()
 const invokeIds = new Map<string, string>()
 
 export function createCorePluginWorker (plugin: NeonPlugin) {
@@ -159,14 +166,25 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
         }
     })
     pluginWorker.once('online', () => {
-        for (const [qqId] of botWorkers) {
+        for (const [qqId, botWorker] of botWorkers) {
+            const ports = new MessageChannel()
+            botWorker.postMessage({
+                id: randonID(),
+                type: 'connect-plugin',
+                value: {
+                    qqId,
+                    pluginType: messages.WorkerType.CorePlugin,
+                    port: ports.port1
+                }
+            } as messages.ConnectPluginMessage, [ports.port1])
             pluginWorker.postMessage({
                 id: randonID(),
                 type: 'enable-plugin',
                 value: {
-                    qqId
+                    qqId,
+                    port: ports.port2
                 }
-            } as messages.SetPluginMessage)
+            } as messages.SetPluginMessage, [ports.port2])
         }
     })
     return pluginWorker
@@ -286,7 +304,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             const qqid = (data as messages.DeployBotWorkerData).qqid
             const config = (data as messages.DeployBotWorkerData).config
             bot = createClient(qqid, {
-                // log_level: 'off',
+                log_level: 'debug',
                 ...config
             })
             bot.on('system.online', () => {
@@ -323,7 +341,9 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                         type: 'node-oicq-event',
                         value: data
                     }
-                    parentPort!!.postMessage(postData)
+                    for (const port of pluginPorts) {
+                        port.postMessage(postData)
+                    }
                 })
             }
             bot.login(config.password)
@@ -362,14 +382,160 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
     }
     case 'enable-plugin':
     {
-        const qqid = (message as messages.SetPluginMessage).value.qqId
+        const port = (message as messages.SetPluginMessage).value.port || parentPort
+        if (!(port && port instanceof MessagePort)) {
+            logger.warn('通信接口类型不正确')
+            break
+        }
+        const pluginMessage = (message as messages.SetPluginMessage).value
+        if (!(port && port instanceof MessagePort)) {
+            logger.warn('通信接口类型不正确')
+            break
+        }
+        const qqid = pluginMessage.qqId
         if (qqid) {
             if (!botProxies.has(qqid)) {
-                const proxy = new BotProxy(qqid)
+                const proxy = new BotProxy(qqid, port)
                 if (plugin.enable) await plugin.enable(proxy)
                 botProxies.set(qqid, proxy)
             }
         }
+        break
+    }
+    case 'verify-message':
+    {
+        if (bot) {
+            bot.sliderLogin(message.value.token)
+        } else {
+            logger.warn('机器人尚未初始化，无法验证！')
+        }
+        break
+    }
+    case 'connect-plugin':
+    {
+        // Bot Thread 连接 Plugin Thread
+        const port = (message as messages.ConnectPluginMessage).value.port
+        const pluginType = (message as messages.ConnectPluginMessage).value.pluginType
+        if (!(port && port instanceof MessagePort)) {
+            logger.warn('通信接口类型不正确')
+            break
+        }
+        port.once('close', () => {
+            pluginPorts.delete(port)
+        })
+        port.on('message', async (message: messages.BaseMessage) => {
+            if (message.type === 'node-oicq-invoke') {
+                const data = message as messages.NodeOICQInvokeMessage
+                const invokeData = data.value
+                if (typeof (bot as any)[invokeData.methodName] === 'function') {
+                    const result = (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
+                    if (result instanceof Promise) {
+                        try {
+                            port.postMessage({
+                                id: data.id,
+                                succeed: true,
+                                value: await result
+                            } as messages.BaseResult)
+                        } catch (err) {
+                            port.postMessage({
+                                id: data.id,
+                                succeed: false,
+                                value: err
+                            } as messages.BaseResult)
+                        }
+                    } else {
+                        port.postMessage({
+                            id: data.id,
+                            succeed: true,
+                            value: result
+                        } as messages.BaseResult)
+                    }
+                } else {
+                    port.postMessage({
+                        id: data.id,
+                        succeed: false,
+                        value: `找不到 ${invokeData.methodName} 调用方法`
+                    } as messages.BaseResult)
+                }
+            } else if (message.type === 'node-oicq-gfs-aquire') {
+                const groupId = (message as messages.AquireGFSMessage)?.value?.groupId
+                if (groupId) {
+                    const ports = new MessageChannel()
+                    const gfs = bot.acquireGfs(groupId)
+                    const gfsObj = {
+                        port: ports.port1,
+                        gfs
+                    }
+                    botGfses.add(gfsObj)
+                    gfsObj.port.on('message', async (message: messages.BaseMessage) => {
+                        if (message.type === 'node-oicq-gfs-aquire') {
+                            const data = message as messages.NodeOICQGFSInvokeMessage
+                            const invokeData = data.value
+                            if (typeof (bot as any)[invokeData.methodName] === 'function') {
+                                const result = (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
+                                if (result instanceof Promise) {
+                                    try {
+                                        port.postMessage({
+                                            id: data.id,
+                                            succeed: true,
+                                            value: await result
+                                        } as messages.BaseResult)
+                                    } catch (err) {
+                                        port.postMessage({
+                                            id: data.id,
+                                            succeed: false,
+                                            value: err
+                                        } as messages.BaseResult)
+                                    }
+                                } else {
+                                    port.postMessage({
+                                        id: data.id,
+                                        succeed: true,
+                                        value: result
+                                    } as messages.BaseResult)
+                                }
+                            } else {
+                                port.postMessage({
+                                    id: data.id,
+                                    succeed: false,
+                                    value: `找不到 ${invokeData.methodName} 调用方法`
+                                } as messages.BaseResult)
+                            }
+                        }
+                    })
+                    gfsObj.port.once('close', () => {
+                        botGfses.delete(gfsObj)
+                    })
+                    port.postMessage({
+                        id: message.id,
+                        succeed: true,
+                        value: {
+                            groupId,
+                            port: ports.port2
+                        }
+                    } as messages.AquireGFSResult, [ports.port2])
+                } else {
+                    port.postMessage({
+                        id: message.id,
+                        succeed: false,
+                        value: '请求群文件系统时未提供群号'
+                    } as messages.BaseResult)
+                }
+            } else if (pluginType !== messages.WorkerType.CorePlugin) {
+                port.postMessage({
+                    id: message.id,
+                    succeed: false,
+                    value: '未知的调用消息'
+                } as messages.BaseResult)
+            } else {
+                port.postMessage({
+                    id: message.id,
+                    succeed: false,
+                    value: '未知的调用消息'
+                } as messages.BaseResult)
+            }
+        })
+        pluginPorts.add(port)
         break
     }
     case 'disable-plugin':
@@ -380,6 +546,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 const proxy = botProxies.get(qqid)
                 if (proxy) {
                     if (plugin.disable) await plugin.disable(proxy)
+                    proxy.close()
                     botProxies.delete(qqid)
                 }
             }
@@ -400,51 +567,6 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                     botProxies.delete(qqid)
                 }
             }
-        }
-        break
-    }
-    case 'node-oicq-invoke':
-    {
-        const data = message as messages.NodeOICQInvokeMessage
-        const invokeData = data.value
-        if (typeof (bot as any)[invokeData.methodName] === 'function') {
-            const result = (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
-            if (result instanceof Promise) {
-                try {
-                    parentPort!!.postMessage({
-                        id: data.id,
-                        succeed: true,
-                        value: await result
-                    } as messages.BaseResult)
-                } catch (err) {
-                    parentPort!!.postMessage({
-                        id: data.id,
-                        succeed: false,
-                        value: err
-                    } as messages.BaseResult)
-                }
-            } else {
-                parentPort!!.postMessage({
-                    id: data.id,
-                    succeed: true,
-                    value: result
-                } as messages.BaseResult)
-            }
-        } else {
-            parentPort!!.postMessage({
-                id: data.id,
-                succeed: false,
-                value: `找不到 ${invokeData.methodName} 调用方法`
-            } as messages.BaseResult)
-        }
-        break
-    }
-    case 'verify-message':
-    {
-        if (bot) {
-            bot.sliderLogin(message.value.token)
-        } else {
-            logger.warn('机器人尚未初始化，无法验证！')
         }
         break
     }

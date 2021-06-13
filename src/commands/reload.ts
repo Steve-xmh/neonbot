@@ -48,7 +48,15 @@ const reload: Command = {
                 }
                 return logger.info('已重新启动插件 ' + pluginId)
             } else {
-                return logger.error('找不到指定插件 ID 的工作线程，可能是插件不存在或插件未被启用')
+                const possiblePlugins = [...pluginWorkers.keys()].filter(v => v.search(pluginId) !== -1)
+                if (possiblePlugins.length) {
+                    logger.warn('找不到指定插件 ID 的工作线程，也许你要找的插件 ID 是这个？')
+                    for (const possiblePlugin of possiblePlugins) {
+                        logger.warn(possiblePlugin)
+                    }
+                } else {
+                    return logger.error('找不到指定插件 ID 的工作线程，可能是插件不存在或插件未被启用')
+                }
             }
         } else if (args[1] === 'coreplugin') {
             const pluginId = args[2]
@@ -63,7 +71,15 @@ const reload: Command = {
                 }
                 return logger.info('已重新启动插件 ' + pluginId)
             } else {
-                return logger.error('找不到指定核心插件 ID 的工作线程，可能是核心插件不存在或核心插件未被启用')
+                const possiblePlugins = [...corePluginWorkers.keys()].filter(v => v.search(pluginId) !== -1)
+                if (possiblePlugins.length) {
+                    logger.warn('找不到指定核心插件 ID 的工作线程，也许你要找的插件 ID 是这个？')
+                    for (const possiblePlugin of possiblePlugins) {
+                        logger.warn(possiblePlugin)
+                    }
+                } else {
+                    return logger.error('找不到指定核心插件 ID 的工作线程，可能是核心插件不存在或核心插件未被启用')
+                }
             }
         } else {
             return logger.info('指令帮助：reload (bot|plugin|coreplugin) PLUGIN_OR_BOT_ID')

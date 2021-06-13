@@ -1,8 +1,10 @@
 import { EventEmitter } from 'events'
-import { parentPort } from 'worker_threads'
+import { MessagePort, parentPort } from 'worker_threads'
 import { messages } from './messages'
 import * as oicq from 'oicq'
 import { PluginInfos } from './plugin'
+import { logger } from '.'
+import { GFSProxy } from './gfsproxy'
 
 export const accpetableMethods = [
     'login',
@@ -65,6 +67,7 @@ export const accpetableMethods = [
     'cleanCache',
     'canSendImage',
     'canSendRecord',
+    'acquireGfs',
     'getVersionInfo',
     'getStatus',
     'getLoginInfo',
@@ -122,6 +125,8 @@ export const accpetableEvents = [
     'notice'
 ]
 
+export class BotProxyError extends Error {}
+
 /**
  * 在机器人线程里运行的代理机器人，将会转换 oicq 的各类方法调用及事件触发并发送至主线程处理
  *
@@ -129,11 +134,18 @@ export const accpetableEvents = [
  */
 export class BotProxy extends EventEmitter {
     private awaitingPromises = new Map<string, [(result: any) => void, (reason: any) => void]>()
+    private channelClosed = false
 
-    constructor (public readonly qqid: number) {
+    constructor (public readonly qqid: number, private readonly port: MessagePort) {
         super()
-        parentPort!!.on('message', (value) => {
-            const data = value as messages.BaseMessage
+        process.once('uncaughtException', () => {
+            this.close() // 出错时关闭通讯接口
+        })
+        this.port.once('close', () => {
+            this.channelClosed = true
+        })
+        const messageCallback = (data: messages.BaseMessage) => {
+            logger.debug(data)
             if (this.awaitingPromises.has(data.id)) {
                 const result = data as unknown as messages.BaseResult
                 const [resolve, reject] = this.awaitingPromises.get(data.id)!!
@@ -153,26 +165,59 @@ export class BotProxy extends EventEmitter {
                     }
                 }
                 this.emit(evt.eventName, evt)
+            } else {
+                logger.warn('接收到未知的代理机器人消息：', data)
             }
-        })
+        }
+        parentPort?.on('message', messageCallback)
+        this.port.on('message', messageCallback)
     }
 
+    /**
+     * 向机器人线程发送调用消息，并等待返回数据
+     * **不建议直接调用此函数，使用其他包装函数**
+     * @param type 通讯消息类型
+     * @param value 需要传递的数据
+     * @returns 根据消息类型所传回的实际数据
+     */
     invoke (type: messages.EventNames, value?: any): Promise<any> {
+        if (this.channelClosed) {
+            return Promise.reject(new BotProxyError('通信接口已经关闭'))
+        } else {
+            return new Promise((resolve, reject) => {
+                const msg = messages.makeMessage(type, value)
+                this.awaitingPromises.set(msg.id, [resolve, reject])
+                this.port.postMessage(msg)
+            })
+        }
+    }
+
+    /**
+     * 向宿主线程发送调用消息，并等待返回数据
+     * @param type 通讯消息类型
+     * @param value 需要传递的数据
+     * @returns 根据消息类型所传回的实际数据
+     */
+    private invokeParentPort (type: messages.EventNames, value?: any): Promise<any> {
         return new Promise((resolve, reject) => {
-            const msg = messages.makeMessage(type, value)
-            this.awaitingPromises.set(msg.id, [resolve, reject])
-            parentPort!!.postMessage(msg)
+            if (!parentPort) {
+                return reject(new BotProxyError('通信接口已经关闭'))
+            } else {
+                const msg = messages.makeMessage(type, value)
+                this.awaitingPromises.set(msg.id, [resolve, reject])
+                parentPort.postMessage(msg)
+            }
         })
     }
 
     /** 获取可用的插件列表 */
     getListPlugin () {
-        return this.invoke('list-plugins') as Promise<PluginInfos>
+        return this.invokeParentPort('list-plugins') as Promise<PluginInfos>
     }
 
     /** 对机器人启用插件 */
     enablePlugin (pluginId: string) {
-        return this.invoke('enable-plugin', {
+        return this.invokeParentPort('enable-plugin', {
             qqId: this.qqid,
             pluginId
         }) as Promise<void>
@@ -180,7 +225,7 @@ export class BotProxy extends EventEmitter {
 
     /** 禁用插件 */
     disablePlugin (pluginId: string) {
-        return this.invoke('disable-plugin', {
+        return this.invokeParentPort('disable-plugin', {
             qqId: this.qqid,
             pluginId
         }) as Promise<void>
@@ -188,7 +233,7 @@ export class BotProxy extends EventEmitter {
 
     /** 重载插件 */
     reloadPlugin (pluginId: string) {
-        return this.invoke('reload-plugin', {
+        return this.invokeParentPort('reload-plugin', {
             qqId: this.qqid,
             pluginId
         }) as Promise<void>
@@ -895,11 +940,15 @@ export class BotProxy extends EventEmitter {
      * 进入群文件系统 **尚未完成异步化，请勿调用**
      */
     acquireGfs (groupId: number) {
-        return this.invoke('node-oicq-invoke', {
+        return (this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'acquireGfs',
             arguments: [groupId]
-        }) as Promise<oicq.Ret>
+        }) as Promise<{
+            port: MessagePort
+        }>).then(ret => {
+            return new GFSProxy(groupId, ret.port)
+        })
     }
 
     /**
@@ -963,5 +1012,13 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'getVersionInfo'
         }) as Promise<oicq.Ret<typeof import('oicq/package.json')>>
+    }
+
+    /**
+     * 释放对象，关闭通讯接口
+     * `BotProxy` 的通讯一般由 NeonBot 自行管理，插件无需调用此函数
+     */
+    close () {
+        this.port.close()
     }
 }

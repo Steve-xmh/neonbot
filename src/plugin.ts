@@ -7,10 +7,12 @@ import { BotProxy } from './botproxy'
 import { Logger } from 'log4js'
 import { botWorkers, config, logger, pluginWorkers } from '.'
 import { createPluginWorker } from './worker'
+import { MessageChannel } from 'worker_threads'
 import { messages } from './messages'
 import { readdir, stat } from 'fs/promises'
 import { resolve } from 'path'
 import { loadConfig, saveConfig } from './config'
+import { randonID } from './utils'
 
 /**
  * 一个初始化时会被传递的配置对象
@@ -122,11 +124,19 @@ export async function enablePlugin (qqId: number, pluginId: string) {
             pluginWorkers.set(pluginId, pluginWorker)
         }
         const pluginWorker = pluginWorkers.get(pluginId)
+        const ports = new MessageChannel()
+        botWorkers.get(qqId)!!.postMessage({
+            type: 'connect-plugin',
+            value: {
+                port: ports.port1,
+                pluginType: messages.WorkerType.Plugin
+            }
+        } as messages.ConnectPluginMessage, [ports.port1])
         pluginWorker!!.postMessage({
             type: 'enable-plugin',
-            value: { qqId }
-        } as messages.SetPluginMessage)
-        logger.info('已启用插件(线程) ' + pluginId + ' 对 ' + qqId)
+            value: { qqId, port: ports.port2 }
+        } as messages.SetPluginMessage, [ports.port2])
+        logger.info('已对 ' + qqId + ' 启用插件(线程)  ' + pluginId)
     } else {
         throw new Error('未找到插件 ' + pluginId + ' 可供机器人 ' + qqId + ' 使用')
     }
