@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto'
 import { AccountConfig } from '.'
-import { CommonEventData, ConfBot, MessageElem, Ret } from 'oicq'
+import { CommonEventData, ConfBot, FriendInfo, Gender, GroupInfo, MemberInfo, MessageElem, Ret, Statistics, StrangerInfo } from 'oicq'
 import { randonID } from './utils'
 import { InitConfig } from './plugin'
 import { MessagePort } from 'worker_threads'
@@ -22,6 +22,7 @@ export namespace messages {
         'disable-plugin' |
         'reload-plugin' |
         'verify-message' |
+        'node-oicq-sync' |
         'node-oicq-event' |
         'node-oicq-invoke' |
         'node-oicq-gfs-aquire' |
@@ -101,9 +102,9 @@ export namespace messages {
 
     export type OICQMessage = MessageElem | Iterable<MessageElem> | string
 
-    export interface NodeOICQEventMessage extends BaseMessage {
+    export interface NodeOICQEventMessage<T = CommonEventData> extends BaseMessage {
         type: 'node-oicq-event'
-        value: CommonEventData & {
+        value: (T extends CommonEventData ? T : CommonEventData) & {
             eventName: string
             // eslint-disable-next-line camelcase
             reply?: (message: OICQMessage, autoEscape?: boolean) => Promise<Ret<{ message_id: string }>>
@@ -116,6 +117,36 @@ export namespace messages {
             qqId: number
             methodName: string
             arguments: any[]
+        }
+    }
+
+    /** 同步 Bot 线程的属性更新 */
+    export interface NodeOICQSyncMessage extends BaseMessage {
+        type: 'node-oicq-sync',
+        value: {
+            readonly uin: number;
+            // eslint-disable-next-line camelcase
+            readonly password_md5: Uint8Array;
+            readonly nickname: string;
+            readonly sex: Gender;
+            readonly age: number;
+            /** 在线状态 */
+            // eslint-disable-next-line camelcase
+            readonly online_status: number;
+            /** 好友列表 */
+            readonly fl: Map<number, FriendInfo>;
+            /** 陌生人列表 */
+            readonly sl: Map<number, StrangerInfo>;
+            /** 群列表 */
+            readonly gl: Map<number, GroupInfo>;
+            /** 群员列表 */
+            readonly gml: Map<number, Map<number, MemberInfo>>;
+            /** 当前账号本地存储路径 */
+            readonly dir: string;
+            /** 配置信息(大部分参数支持热修改) */
+            readonly config: ConfBot;
+            /** 数据统计信息 */
+            readonly stat: Statistics;
         }
     }
 

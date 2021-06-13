@@ -517,6 +517,24 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 } as messages.BaseResult)
             }
         })
+        port.postMessage({
+            id: randonID(),
+            type: 'node-oicq-sync',
+            value: {
+                uin: bot?.uin,
+                password_md5: new Uint8Array(bot?.password_md5),
+                nickname: bot?.nickname,
+                sex: bot?.sex,
+                online_status: bot?.online_status,
+                fl: bot?.fl,
+                sl: bot?.sl,
+                gl: bot?.gl,
+                gml: bot?.gml,
+                dir: bot?.dir,
+                config: bot?.config,
+                stat: bot?.stat
+            }
+        } as messages.NodeOICQSyncMessage)
         pluginPorts.add(port)
         break
     }
