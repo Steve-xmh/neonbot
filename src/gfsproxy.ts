@@ -4,6 +4,8 @@ import { messages } from './messages'
 import { logger } from '.'
 import EventEmitter = require('events')
 
+export class GFSProxyError extends Error {}
+
 /**
  * 在机器人线程里运行的代理群文件对象
  *
@@ -12,6 +14,7 @@ import EventEmitter = require('events')
 export class GFSProxy extends EventEmitter {
     private awaitingPromises = new Map<string, [(result: any) => void, (reason: any) => void]>()
     private portReady = Symbol('port-ready')
+    private closed = false
     private port?: MessagePort
 
     constructor (
@@ -56,7 +59,9 @@ export class GFSProxy extends EventEmitter {
      * @returns 根据消息类型所传回的实际数据
      */
     invoke (type: messages.EventNames, value?: any): Promise<any> {
-        if (this.port) {
+        if (this.closed) {
+            return Promise.reject(new GFSProxyError('通讯接口已关闭'))
+        } else if (this.port) {
             return new Promise((resolve, reject) => {
                 const msg = messages.makeMessage(type, value)
                 this.awaitingPromises.set(msg.id, [resolve, reject])
@@ -162,5 +167,6 @@ export class GFSProxy extends EventEmitter {
      */
     close () {
         this.port?.close()
+        this.closed = true
     }
 }
