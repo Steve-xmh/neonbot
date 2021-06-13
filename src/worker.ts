@@ -459,30 +459,21 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                     }
                     botGfses.add(gfsObj)
                     gfsObj.port.on('message', async (message: messages.BaseMessage) => {
-                        if (message.type === 'node-oicq-gfs-aquire') {
+                        if (message.type === 'node-oicq-gfs-invoke') {
                             const data = message as messages.NodeOICQGFSInvokeMessage
                             const invokeData = data.value
-                            if (typeof (bot as any)[invokeData.methodName] === 'function') {
-                                const result = (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
-                                if (result instanceof Promise) {
-                                    try {
-                                        port.postMessage({
-                                            id: data.id,
-                                            succeed: true,
-                                            value: await result
-                                        } as messages.BaseResult)
-                                    } catch (err) {
-                                        port.postMessage({
-                                            id: data.id,
-                                            succeed: false,
-                                            value: err
-                                        } as messages.BaseResult)
-                                    }
-                                } else {
+                            if (typeof (gfsObj.gfs as any)[invokeData.methodName] === 'function') {
+                                try {
                                     port.postMessage({
                                         id: data.id,
                                         succeed: true,
-                                        value: result
+                                        value: await (gfsObj.gfs as any)[invokeData.methodName](...(invokeData.arguments || []))
+                                    } as messages.BaseResult)
+                                } catch (err) {
+                                    port.postMessage({
+                                        id: data.id,
+                                        succeed: false,
+                                        value: err
                                     } as messages.BaseResult)
                                 }
                             } else {

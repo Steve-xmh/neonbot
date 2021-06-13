@@ -8,8 +8,6 @@ import EventEmitter = require('events')
  * 在机器人线程里运行的代理群文件对象
  *
  * 介于需要跨线程调用，所以此处所有的函数都是异步的
- *
- * 插件禁用或不再需要使用此函数时，需要调用 `GFSProxy.close` 以关闭通讯接口，否则会造成内存泄漏。
  */
 export class GFSProxy extends EventEmitter {
     private awaitingPromises = new Map<string, [(result: any) => void, (reason: any) => void]>()
