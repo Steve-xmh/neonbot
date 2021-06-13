@@ -446,7 +446,7 @@ export class BotProxy extends EventEmitter {
      *
      * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.fl 一致
      */
-    async getFriendList () {
+    async getFriendListAsync () {
         const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getFriendList'
@@ -458,11 +458,19 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
+     * 获取好友列表，调用时会同步一次好友列表
+     */
+    getFriendList () {
+        this.getFriendListAsync()
+        return this.fl
+    }
+
+    /**
      * 获取陌生人列表
      *
      * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.sl 一致
      */
-    getStrangerList () {
+    getStrangerListAsync () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getStrangerList'
@@ -470,15 +478,31 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
+     * 获取陌生人列表，调用时会同步一次陌生人列表
+     */
+    getStrangerList () {
+        this.getStrangerListAsync()
+        return this.sl
+    }
+
+    /**
      * 获取群列表
      *
      * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.gl 一致
      */
-    getGroupList () {
+    getGroupListAsync () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getGroupList'
         }) as Promise<oicq.Ret<Map<number, oicq.GroupInfo>>>
+    }
+
+    /**
+     * 获取群列表，调用时会同步一次群组列表
+     */
+    getGroupList () {
+        this.getGroupListAsync()
+        return this.gl
     }
 
     /**
