@@ -424,15 +424,18 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             pluginPorts.delete(port)
         })
         port.on('message', async (message: messages.BaseMessage) => {
+            logger.debug('<- Plugin', message)
             if (message.type === 'node-oicq-invoke') {
                 const data = message as messages.NodeOICQInvokeMessage
                 const invokeData = data.value
                 if (typeof (bot as any)[invokeData.methodName] === 'function') {
                     try {
+                        const value = await (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
+                        logger.debug(message.id, '->', value)
                         port.postMessage({
                             id: data.id,
                             succeed: true,
-                            value: await (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
+                            value
                         } as messages.BaseResult)
                     } catch (err) {
                         port.postMessage({
