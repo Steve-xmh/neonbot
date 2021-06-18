@@ -83,7 +83,12 @@ async function main () {
         } else {
             const configPath = process.argv[process.argv.length - 1]
             logger.info('正在加载配置文件', configPath)
-            config = require(configPath) as NeonBotConfig
+            try {
+                config = require(configPath) as NeonBotConfig
+            } catch (err) {
+                logger.fatal('无法加载配置文件，请检查配置文件是否正确：', err)
+                process.exit(1)
+            }
             setupConsole()
             config.admins = config.admins || []
             config.pluginSearchPath = config.pluginSearchPath || [resolve(configPath, '../plugins')]
