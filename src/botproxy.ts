@@ -1,8 +1,12 @@
 import { EventEmitter } from 'events'
-import { parentPort } from 'worker_threads'
+import { MessagePort, parentPort } from 'worker_threads'
 import { messages } from './messages'
 import * as oicq from 'oicq'
 import { PluginInfos } from './plugin'
+import { logger } from '.'
+import { GFSProxy } from './gfsproxy'
+import { parse } from './cqcode'
+import { randomBytes } from 'crypto'
 
 export const accpetableMethods = [
     'login',
@@ -65,6 +69,7 @@ export const accpetableMethods = [
     'cleanCache',
     'canSendImage',
     'canSendRecord',
+    'acquireGfs',
     'getVersionInfo',
     'getStatus',
     'getLoginInfo',
@@ -122,6 +127,8 @@ export const accpetableEvents = [
     'notice'
 ]
 
+export class BotProxyError extends Error { }
+
 /**
  * 在机器人线程里运行的代理机器人，将会转换 oicq 的各类方法调用及事件触发并发送至主线程处理
  *
@@ -129,11 +136,76 @@ export const accpetableEvents = [
  */
 export class BotProxy extends EventEmitter {
     private awaitingPromises = new Map<string, [(result: any) => void, (reason: any) => void]>()
+    private channelClosed = false
+    private readonly firstSync = Symbol('first-sync')
 
-    constructor (public readonly qqid: number) {
+    private firstSynced = false
+
+    // 通过 MessagePort 初始化传入数据 + 监听事件来获取更新
+
+    uin = 0
+    // eslint-disable-next-line camelcase
+    password_md5 = Buffer.alloc(0)
+    passwordMd5 = Buffer.alloc(0)
+
+    online = false
+    nickname = ''
+    sex: oicq.Gender = 'unknown'
+    age = 0;
+
+    /** 日志记录器 */
+    logger = logger
+
+    /** 在线状态 */
+    // eslint-disable-next-line camelcase
+    online_status = 0
+    /** 在线状态 */
+    onlineStatus = 0
+
+    /** 好友列表 */
+    fl = new Map<number, oicq.FriendInfo>()
+    /**
+     * 陌生人列表
+     *
+     * 该属性并非完全同步，请改用 `BotProxy.getStrangerList`
+     */
+    sl = new Map<number, oicq.StrangerInfo>()
+    /** 群列表 */
+    gl = new Map<number, oicq.GroupInfo>()
+
+    gml = new Map<number, Map<number, oicq.MemberInfo>>()
+
+    /** 当前账号本地存储路径 */
+    dir = ''
+
+    /** 该属性并非完全同步，请改用 `BotProxy.getStatus` */
+    stat: oicq.Statistics = {
+        start_time: 0,
+        lost_times: 0,
+        recv_pkt_cnt: 0,
+        sent_pkt_cnt: 0,
+        lost_pkt_cnt: 0,
+        recv_msg_cnt: 0,
+        sent_msg_cnt: 0
+    }
+
+    /** 配置信息，目前不可进行热修改 */
+    config: oicq.ConfBot = {}
+
+    /** 是否在消息前缀加入无意义的随机 [mirai:data={ran:123456}] 消息，可解决消息重复发送导致的消息无法看见的问题 */
+    randomHashedMessage = false
+
+    constructor (public readonly qqid: number, private readonly port: MessagePort) {
         super()
-        parentPort!!.on('message', (value) => {
-            const data = value as messages.BaseMessage
+        this.uin = qqid
+        process.once('uncaughtException', () => {
+            this.close() // 出错时关闭通讯接口
+        })
+        this.port.once('close', () => {
+            this.channelClosed = true
+        })
+        const messageCallback = (data: messages.BaseMessage) => {
+            logger.debug(data)
             if (this.awaitingPromises.has(data.id)) {
                 const result = data as unknown as messages.BaseResult
                 const [resolve, reject] = this.awaitingPromises.get(data.id)!!
@@ -144,35 +216,136 @@ export class BotProxy extends EventEmitter {
                     reject(result.value)
                 }
             } else if (data.type === 'node-oicq-event') {
-                const evt = (data as messages.NodeOICQEventMessage).value
-                if (evt.eventName.startsWith('message')) {
-                    if (evt.message_type === 'group') {
-                        evt.reply = (message: any, autoEscape = false) => this.sendGroupMsg((evt as any).group_id, message, autoEscape)
-                    } else {
-                        evt.reply = (message: any, autoEscape = false) => this.sendPrivateMsg((evt as any).user_id, message, autoEscape)
-                    }
+                if (this.firstSynced) {
+                    this.collectEventAndEmit(data)
+                } else {
+                    this.once(this.firstSync, this.collectEventAndEmit.bind(this, data))
                 }
-                this.emit(evt.eventName, evt)
+            } else if (data.type === 'node-oicq-sync') {
+                const syncData = (data as messages.NodeOICQSyncMessage).value
+                this.passwordMd5 = this.password_md5 = Buffer.from(syncData.password_md5)
+                this.onlineStatus = this.online_status = syncData.online_status
+                this.nickname = syncData.nickname
+                this.online = syncData.online
+                this.sex = syncData.sex
+                this.uin = syncData.uin
+                this.fl = syncData.fl
+                this.sl = syncData.sl
+                this.gl = syncData.gl
+                this.gml = syncData.gml
+                this.dir = syncData.dir
+                this.config = syncData.config
+                this.stat = syncData.stat
+                if (!this.firstSynced) {
+                    this.firstSynced = true
+                    this.emit(this.firstSync)
+                }
+                logger.info('Synced Data', this)
+            } else {
+                logger.warn('接收到未知的代理机器人消息：', data)
             }
+        }
+        parentPort?.on('message', messageCallback)
+        this.port.on('message', messageCallback)
+    }
+
+    private collectEventAndEmit (data: messages.BaseMessage) {
+        const evt = (data as messages.NodeOICQEventMessage).value
+        // 同步属性
+        switch (evt.eventName) {
+        case 'system.online':
+            this.getStatus()
+            this.online = true
+            break
+        case 'system.offline':
+            this.onlineStatus = this.online_status = 0
+            this.online = false
+            break
+        case 'notice.friend.increase':
+            this.getFriendList()
+            break
+        case 'notice.friend.decrease':
+            this.fl.delete((evt as any).user_id)
+            break
+        case 'notice.group.increase':
+            this.getGroupMemberInfo((evt as any).group_id, (evt as any).user_id)
+            break
+        case 'notice.group.decrease':
+        {
+            const gms = this.gml.get((evt as any).group_id)
+            if (gms) {
+                gms.delete((evt as any).user_id)
+            }
+            break
+        }
+        }
+        if (evt.eventName.startsWith('message')) {
+            if (evt.message_type === 'group') {
+                evt.reply = (message: any, autoEscape = false) => this.sendGroupMsg((evt as any).group_id, message, autoEscape)
+            } else {
+                evt.reply = (message: any, autoEscape = false) => this.sendPrivateMsg((evt as any).user_id, message, autoEscape)
+            }
+        }
+        this.emit(evt.eventName, evt)
+    }
+
+    /**
+     * 当初始化完成之后（第一次同步事件触发时）返回
+     */
+    private whenReady (): Promise<void> {
+        if (this.channelClosed) {
+            return Promise.reject(new BotProxyError('通信接口已经关闭'))
+        } else if (this.firstSynced) {
+            return Promise.resolve()
+        } else {
+            return new Promise((resolve) => {
+                this.once(this.firstSync, resolve)
+            })
+        }
+    }
+
+    /**
+     * 向机器人线程发送调用消息，并等待返回数据
+     * **不建议直接调用此函数，使用其他包装函数**
+     * @param type 通讯消息类型
+     * @param value 需要传递的数据
+     * @returns 根据消息类型所传回的实际数据
+     */
+    async invoke (type: messages.EventNames, value?: any): Promise<any> {
+        await this.whenReady()
+        return await new Promise((resolve, reject) => {
+            const msg = messages.makeMessage(type, value)
+            this.awaitingPromises.set(msg.id, [resolve, reject])
+            this.port.postMessage(msg)
         })
     }
 
-    invoke (type: messages.EventNames, value?: any): Promise<any> {
+    /**
+     * 向宿主线程发送调用消息，并等待返回数据
+     * @param type 通讯消息类型
+     * @param value 需要传递的数据
+     * @returns 根据消息类型所传回的实际数据
+     */
+    private invokeParentPort (type: messages.EventNames, value?: any): Promise<any> {
         return new Promise((resolve, reject) => {
-            const msg = messages.makeMessage(type, value)
-            this.awaitingPromises.set(msg.id, [resolve, reject])
-            parentPort!!.postMessage(msg)
+            if (!parentPort) {
+                return reject(new BotProxyError('通信接口已经关闭'))
+            } else {
+                const msg = messages.makeMessage(type, value)
+                this.awaitingPromises.set(msg.id, [resolve, reject])
+                parentPort.postMessage(msg)
+            }
         })
     }
 
     /** 获取可用的插件列表 */
     getListPlugin () {
-        return this.invoke('list-plugins') as Promise<PluginInfos>
+        return this.invokeParentPort('list-plugins') as Promise<PluginInfos>
     }
 
     /** 对机器人启用插件 */
     enablePlugin (pluginId: string) {
-        return this.invoke('enable-plugin', {
+        return this.invokeParentPort('enable-plugin', {
             qqId: this.qqid,
             pluginId
         }) as Promise<void>
@@ -180,7 +353,7 @@ export class BotProxy extends EventEmitter {
 
     /** 禁用插件 */
     disablePlugin (pluginId: string) {
-        return this.invoke('disable-plugin', {
+        return this.invokeParentPort('disable-plugin', {
             qqId: this.qqid,
             pluginId
         }) as Promise<void>
@@ -188,7 +361,7 @@ export class BotProxy extends EventEmitter {
 
     /** 重载插件 */
     reloadPlugin (pluginId: string) {
-        return this.invoke('reload-plugin', {
+        return this.invokeParentPort('reload-plugin', {
             qqId: this.qqid,
             pluginId
         }) as Promise<void>
@@ -235,11 +408,9 @@ export class BotProxy extends EventEmitter {
         }) as Promise<void>
     }
 
-    isOnline () {
-        return this.invoke('node-oicq-invoke', {
-            qqId: this.qqid,
-            methodName: 'isOnline'
-        }) as Promise<boolean>
+    async isOnline () {
+        await this.whenReady()
+        return this.online
     }
 
     /**
@@ -273,6 +444,10 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'setOnlineStatus',
             arguments: [status]
+        }).then((v: oicq.Ret) => {
+            if (!v.error) {
+                this.online_status = this.onlineStatus = status
+            }
         }) as Promise<oicq.Ret>
     }
 
@@ -281,11 +456,23 @@ export class BotProxy extends EventEmitter {
      *
      * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.fl 一致
      */
-    getFriendList () {
-        return this.invoke('node-oicq-invoke', {
+    async getFriendListAsync () {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getFriendList'
-        }) as Promise<oicq.Ret<oicq.Client['fl']>>
+        })
+        if (!v.error && v.data) {
+            this.fl = v.data
+        }
+        return v
+    }
+
+    /**
+     * 获取好友列表，调用时会同步一次好友列表
+     */
+    getFriendList () {
+        this.getFriendListAsync()
+        return this.fl
     }
 
     /**
@@ -293,11 +480,19 @@ export class BotProxy extends EventEmitter {
      *
      * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.sl 一致
      */
-    getStrangerList () {
+    getStrangerListAsync () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getStrangerList'
-        }) as Promise<oicq.Ret<oicq.Client['sl']>>
+        }) as Promise<oicq.Ret<Map<number, oicq.StrangerInfo>>>
+    }
+
+    /**
+     * 获取陌生人列表，调用时会同步一次陌生人列表
+     */
+    getStrangerList () {
+        this.getStrangerListAsync()
+        return this.sl
     }
 
     /**
@@ -305,22 +500,34 @@ export class BotProxy extends EventEmitter {
      *
      * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.gl 一致
      */
-    getGroupList () {
+    getGroupListAsync () {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getGroupList'
-        }) as Promise<oicq.Ret<oicq.Client['gl']>>
+        }) as Promise<oicq.Ret<Map<number, oicq.GroupInfo>>>
+    }
+
+    /**
+     * 获取群列表，调用时会同步一次群组列表
+     */
+    getGroupList () {
+        this.getGroupListAsync()
+        return this.gl
     }
 
     /**
      * 获取群成员列表
      */
-    getGroupMemberList (groupId: number, noCache?: boolean) {
-        return this.invoke('node-oicq-invoke', {
+    async getGroupMemberList (groupId: number, noCache?: boolean) {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getGroupMemberList',
             arguments: [groupId, noCache]
-        }) as Promise<oicq.Ret<ReadonlyMap<number, oicq.MemberInfo>>>
+        })
+        if (!v.error && v.data) {
+            this.gml.set(groupId, v.data)
+        }
+        return v
     }
 
     /**
@@ -348,12 +555,50 @@ export class BotProxy extends EventEmitter {
     /**
      * 获取群员资料
      */
-    getGroupMemberInfo (groupId: number, userId: number, noCache?: boolean) {
-        return this.invoke('node-oicq-invoke', {
+    async getGroupMemberInfo (groupId: number, userId: number, noCache?: boolean) {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getGroupMemberInfo',
             arguments: [groupId, userId, noCache]
-        }) as Promise<oicq.Ret<oicq.MemberInfo>>
+        })
+        if (!v.error && v.data) {
+            const gms = this.gml.get(v.data.group_id)
+            if (gms) {
+                gms.set(v.data.user_id, v.data)
+            } else {
+                this.getGroupMemberList(v.data.group_id)
+            }
+        }
+        return v
+    }
+
+    /**
+     * 预处理消息，可能以后会开放给插件使用？
+     */
+    private preprocessMessage (message: oicq.MessageElem | Iterable<oicq.MessageElem> | string) {
+        // randomHashedMessage
+        if (this.randomHashedMessage) {
+            const ran = randomBytes(4).toString('hex')
+            const msg = {
+                type: 'mirai',
+                data: { data: { ran } }
+            }
+            if (typeof message === 'string') {
+                const parsed = parse(message)
+                parsed.unshift(msg)
+                return parsed
+            } else if (message instanceof Array) {
+                message.unshift(msg)
+                return message
+            } else {
+                return [
+                    msg,
+                    message
+                ]
+            }
+        } else {
+            return message
+        }
     }
 
     /**
@@ -363,8 +608,8 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendPrivateMsg',
-            arguments: [userId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            arguments: [userId, this.preprocessMessage(message), autoEscape]
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -375,8 +620,8 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendGroupMsg',
-            arguments: [groupId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            arguments: [groupId, this.preprocessMessage(message), autoEscape]
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -387,8 +632,8 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendTempMsg',
-            arguments: [groupId, userId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            arguments: [groupId, userId, this.preprocessMessage(message), autoEscape]
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -399,8 +644,8 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendDiscussMsg',
-            arguments: [discussId, message, autoEscape]
-        // eslint-disable-next-line camelcase
+            arguments: [discussId, this.preprocessMessage(message), autoEscape]
+            // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
 
@@ -687,34 +932,62 @@ export class BotProxy extends EventEmitter {
     /**
      * 设置昵称
      */
-    setNickname (nickname: string) {
-        return this.invoke('node-oicq-invoke', {
+    async setNickname (nickname: string) {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'setNickname',
             arguments: [nickname]
-        }) as Promise<oicq.Ret>
+        })
+        if (!v.error) {
+            this.nickname = nickname
+        }
+        return v
     }
 
     /**
      * 设置性别(0未知 1男 2女)
      */
-    setGender (gender: 0 | 1 | 2) {
-        return this.invoke('node-oicq-invoke', {
+    async setGender (gender: 0 | 1 | 2) {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'setGender',
             arguments: [gender]
-        }) as Promise<oicq.Ret>
+        })
+        if (!v.error) {
+            this.sex = [
+                'unknown',
+                'male',
+                'female'
+            ][gender] as oicq.Gender
+        }
+        return v
     }
 
     /**
      * 设置生日(20110202的形式)
      */
-    setBirthday (birthday: string | number) {
-        return this.invoke('node-oicq-invoke', {
+    async setBirthday (birthday: string | number) {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'setBirthday',
             arguments: [birthday]
-        }) as Promise<oicq.Ret>
+        })
+        if (!v.error) {
+            const birth = String(birthday)
+            const year = birth.substring(0, 4)
+            const mouth = birth.substring(4, 6)
+            const day = birth.substring(6, 8)
+            const birthDate = new Date(`${year}-${mouth}-${day} 00:00`)
+            const today = new Date()
+            const age = today.getFullYear() - birthDate.getFullYear()
+            const m = today.getMonth() - birthDate.getMonth()
+            if (m > 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                return age - 1
+            } else {
+                return age
+            }
+        }
+        return v
     }
 
     /**
@@ -862,11 +1135,16 @@ export class BotProxy extends EventEmitter {
     /**
      * 获取在线状态和数据统计
      */
-    getStatus () {
-        return this.invoke('node-oicq-invoke', {
+    async getStatus () {
+        const v = await this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'getStatus'
-        }) as Promise<oicq.Ret<oicq.Status>>
+        })
+        if (!v.error && v.data) {
+            this.onlineStatus = this.online_status = v.data.status
+            this.stat = v.data.statistics
+        }
+        return v
     }
 
     /**
@@ -890,16 +1168,15 @@ export class BotProxy extends EventEmitter {
         }) as Promise<oicq.Ret<any>>
     }
 
-    // TODO: 群文件系统异步化
     /**
-     * 进入群文件系统 **尚未完成异步化，请勿调用**
+     * 进入群文件系统
      */
     acquireGfs (groupId: number) {
-        return this.invoke('node-oicq-invoke', {
-            qqId: this.qqid,
-            methodName: 'acquireGfs',
-            arguments: [groupId]
-        }) as Promise<oicq.Ret>
+        return new GFSProxy(groupId, (this.invoke('node-oicq-gfs-aquire', {
+            groupId
+        }) as Promise<{
+            port: MessagePort
+        }>).then(v => v.port))
     }
 
     /**
@@ -963,5 +1240,13 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'getVersionInfo'
         }) as Promise<oicq.Ret<typeof import('oicq/package.json')>>
+    }
+
+    /**
+     * 释放对象，关闭通讯接口
+     * `BotProxy` 的通讯一般由 NeonBot 自行管理，插件无需调用此函数
+     */
+    close () {
+        this.port.close()
     }
 }

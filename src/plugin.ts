@@ -7,6 +7,7 @@ import { BotProxy } from './botproxy'
 import { Logger } from 'log4js'
 import { botWorkers, config, logger, pluginWorkers } from '.'
 import { createPluginWorker } from './worker'
+import { MessageChannel } from 'worker_threads'
 import { messages } from './messages'
 import { readdir, stat } from 'fs/promises'
 import { resolve } from 'path'
@@ -19,7 +20,9 @@ export interface InitConfig {
     /** 配置文件中定义的管理员 QQID 列表 */
     admins: number[]
     /** 可以随意使用的 log4js.Logger 记录对象 */
-    logger: Logger
+    logger: Logger,
+    /** 插件上一次退出时保存的全局数据 */
+    pluginData: any
 }
 
 /**
@@ -44,18 +47,23 @@ export default interface NeonPlugin {
     init?: (config: InitConfig) => Promise<void>
     /**
      * 插件在一个机器人上被启用或重载后调用，此时可以处理相关的机器人操作
+     * @param pluginData 上一次插件于此机器人禁用时保存的局部机器人数据
      */
-    enable?: (bot: BotProxy) => Promise<void>
+    enable?: (bot: BotProxy, pluginData: any) => Promise<void>
     /**
-     * 插件在一个机器人上被禁用或重载前调用，此时可以处理相关的机器人操作
+     * 插件在一个机器人上被禁用、关闭或重载前调用，此时可以处理相关的机器人操作
      *
      * 为了良好的代码习惯，请在此解除挂载一系列先前挂载的事件
+     *
+     * @returns 返回值将会作为局部机器人数据保存
      */
-    disable?: (bot: BotProxy) => Promise<void>
+    disable?: (bot: BotProxy) => Promise<any>
     /**
      * 插件卸载函数，将在插件被完全禁用时或 NeonBot 将要关闭时调用，请在此处立即处理需要关闭的东西
+     *
+     * @returns 返回值将会作为全局插件数据保存
      */
-    uninit?: () => Promise<void>
+    uninit?: () => Promise<any>
 }
 
 export interface PluginInfos {
@@ -122,11 +130,19 @@ export async function enablePlugin (qqId: number, pluginId: string) {
             pluginWorkers.set(pluginId, pluginWorker)
         }
         const pluginWorker = pluginWorkers.get(pluginId)
+        const ports = new MessageChannel()
+        botWorkers.get(qqId)!!.postMessage({
+            type: 'connect-plugin',
+            value: {
+                port: ports.port1,
+                pluginType: messages.WorkerType.Plugin
+            }
+        } as messages.ConnectPluginMessage, [ports.port1])
         pluginWorker!!.postMessage({
             type: 'enable-plugin',
-            value: { qqId }
-        } as messages.SetPluginMessage)
-        logger.info('已启用插件(线程) ' + pluginId + ' 对 ' + qqId)
+            value: { qqId, port: ports.port2 }
+        } as messages.SetPluginMessage, [ports.port2])
+        logger.info('已对 ' + qqId + ' 启用插件(线程)  ' + pluginId)
     } else {
         throw new Error('未找到插件 ' + pluginId + ' 可供机器人 ' + qqId + ' 使用')
     }

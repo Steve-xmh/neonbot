@@ -18,6 +18,7 @@ export interface AccountConfig {
      */
     password: string | Buffer,
     /** 需要让机器人模拟运行的设备环境，默认为 `Platform.AndroidPhone` */
+    // eslint-disable-next-line no-use-before-define
     platform?: Platform,
 }
 
@@ -52,14 +53,19 @@ export interface NeonBotConfig {
  */
 export enum Platform {
     /** 安卓手机设备（默认） */
+    // eslint-disable-next-line no-unused-vars
     AndroidPhone = 1,
     /** 安卓平板设备 */
+    // eslint-disable-next-line no-unused-vars
     AndroidTablet = 2,
     /** 安卓手表设备 */
+    // eslint-disable-next-line no-unused-vars
     AndroidWatch = 3,
     /** 苹果电脑系统 */
+    // eslint-disable-next-line no-unused-vars
     MacOS = 4,
     /** 苹果平板设备 */
+    // eslint-disable-next-line no-unused-vars
     IPad = 5
 }
 
@@ -77,7 +83,12 @@ async function main () {
         } else {
             const configPath = process.argv[process.argv.length - 1]
             logger.info('正在加载配置文件', configPath)
-            config = require(configPath) as NeonBotConfig
+            try {
+                config = require(configPath) as NeonBotConfig
+            } catch (err) {
+                logger.fatal('无法加载配置文件，请检查配置文件是否正确：', err)
+                process.exit(1)
+            }
             setupConsole()
             config.admins = config.admins || []
             config.pluginSearchPath = config.pluginSearchPath || [resolve(configPath, '../plugins')]
