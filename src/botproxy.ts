@@ -5,6 +5,8 @@ import * as oicq from 'oicq'
 import { PluginInfos } from './plugin'
 import { logger } from '.'
 import { GFSProxy } from './gfsproxy'
+import { parse } from './cqcode'
+import { randomBytes } from 'crypto'
 
 export const accpetableMethods = [
     'login',
@@ -189,6 +191,9 @@ export class BotProxy extends EventEmitter {
 
     /** 配置信息，目前不可进行热修改 */
     config: oicq.ConfBot = {}
+
+    /** 是否在消息前缀加入无意义的随机 [mirai:data={ran:123456}] 消息，可解决消息重复发送导致的消息无法看见的问题 */
+    randomHashedMessage = false
 
     constructor (public readonly qqid: number, private readonly port: MessagePort) {
         super()
@@ -568,13 +573,42 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
+     * 预处理消息，可能以后会开放给插件使用？
+     */
+    private preprocessMessage (message: oicq.MessageElem | Iterable<oicq.MessageElem> | string) {
+        // randomHashedMessage
+        if (this.randomHashedMessage) {
+            const ran = randomBytes(4).toString('hex')
+            const msg = {
+                type: 'mirai',
+                data: { data: { ran } }
+            }
+            if (typeof message === 'string') {
+                const parsed = parse(message)
+                parsed.unshift(msg)
+                return parsed
+            } else if (message instanceof Array) {
+                message.unshift(msg)
+                return message
+            } else {
+                return [
+                    msg,
+                    message
+                ]
+            }
+        } else {
+            return message
+        }
+    }
+
+    /**
      * 私聊
      */
     sendPrivateMsg (userId: number, message: oicq.MessageElem | Iterable<oicq.MessageElem> | string, autoEscape?: boolean) {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendPrivateMsg',
-            arguments: [userId, message, autoEscape]
+            arguments: [userId, this.preprocessMessage(message), autoEscape]
             // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
@@ -586,7 +620,7 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendGroupMsg',
-            arguments: [groupId, message, autoEscape]
+            arguments: [groupId, this.preprocessMessage(message), autoEscape]
             // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
@@ -598,7 +632,7 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendTempMsg',
-            arguments: [groupId, userId, message, autoEscape]
+            arguments: [groupId, userId, this.preprocessMessage(message), autoEscape]
             // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
@@ -610,7 +644,7 @@ export class BotProxy extends EventEmitter {
         return this.invoke('node-oicq-invoke', {
             qqId: this.qqid,
             methodName: 'sendDiscussMsg',
-            arguments: [discussId, message, autoEscape]
+            arguments: [discussId, this.preprocessMessage(message), autoEscape]
             // eslint-disable-next-line camelcase
         }) as Promise<oicq.Ret<{ message_id: string }>>
     }
