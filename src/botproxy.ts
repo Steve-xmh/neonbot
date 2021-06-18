@@ -285,30 +285,34 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
+     * 当初始化完成之后（第一次同步事件触发时）返回
+     */
+    private whenReady (): Promise<void> {
+        if (this.channelClosed) {
+            return Promise.reject(new BotProxyError('通信接口已经关闭'))
+        } else if (this.firstSynced) {
+            return Promise.resolve()
+        } else {
+            return new Promise((resolve) => {
+                this.once(this.firstSync, resolve)
+            })
+        }
+    }
+
+    /**
      * 向机器人线程发送调用消息，并等待返回数据
      * **不建议直接调用此函数，使用其他包装函数**
      * @param type 通讯消息类型
      * @param value 需要传递的数据
      * @returns 根据消息类型所传回的实际数据
      */
-    invoke (type: messages.EventNames, value?: any): Promise<any> {
-        if (this.channelClosed) {
-            return Promise.reject(new BotProxyError('通信接口已经关闭'))
-        } else if (this.firstSynced) {
-            return new Promise((resolve, reject) => {
-                const msg = messages.makeMessage(type, value)
-                this.awaitingPromises.set(msg.id, [resolve, reject])
-                this.port.postMessage(msg)
-            })
-        } else {
-            return new Promise((resolve, reject) => {
-                this.once(this.firstSync, () => {
-                    const msg = messages.makeMessage(type, value)
-                    this.awaitingPromises.set(msg.id, [resolve, reject])
-                    this.port.postMessage(msg)
-                })
-            })
-        }
+    async invoke (type: messages.EventNames, value?: any): Promise<any> {
+        await this.whenReady()
+        return await new Promise((resolve, reject) => {
+            const msg = messages.makeMessage(type, value)
+            this.awaitingPromises.set(msg.id, [resolve, reject])
+            this.port.postMessage(msg)
+        })
     }
 
     /**
@@ -399,7 +403,8 @@ export class BotProxy extends EventEmitter {
         }) as Promise<void>
     }
 
-    isOnline () {
+    async isOnline () {
+        await this.whenReady()
         return this.online
     }
 
