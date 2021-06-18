@@ -241,6 +241,10 @@ export class BotProxy extends EventEmitter {
                     this.emit(this.firstSync)
                 }
                 logger.info('Synced Data', this)
+            } else if ([
+                'disable-plugin'
+            ].includes(data.type)) {
+                // 在插件工作线程主事件处理器内处理
             } else {
                 logger.warn('接收到未知的代理机器人消息：', data)
             }

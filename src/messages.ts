@@ -27,6 +27,8 @@ export namespace messages {
         'node-oicq-invoke' |
         'node-oicq-gfs-aquire' |
         'node-oicq-gfs-invoke' |
+        'save-config' |
+        'stop-bot' |
         'get-save-data'
 
     export enum WorkerType {
@@ -158,6 +160,16 @@ export namespace messages {
             qqId?: number
             port: MessagePort
             pluginId?: string
+            pluginData: any
+        }
+    }
+
+    export interface SaveConfigMessage extends BaseMessage {
+        type: 'save-config'
+        value: {
+            pluginId: string
+            qqId?: number
+            pluginData: any
         }
     }
 
@@ -172,6 +184,10 @@ export namespace messages {
 
     export interface ListPluginMessage extends BaseMessage {
         type: 'list-plugins'
+    }
+
+    export interface StopBotMessage extends BaseMessage {
+        type: 'stop-bot'
     }
 
     export interface GetSaveDataMessage extends BaseMessage {

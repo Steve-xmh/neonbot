@@ -2,7 +2,7 @@ import { Client, createClient, Gfs } from 'oicq'
 import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
-import { loadConfig } from './config'
+import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
 import NeonPlugin, { disablePlugin, enablePlugin, listPlugins, shutdownPlugin } from './plugin'
@@ -108,6 +108,31 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             succeed: true,
             value: data.value
         } as messages.BaseResult)
+    } else if (data.type === 'save-config') {
+        const {
+            qqId,
+            pluginId,
+            pluginData
+        } = (data as messages.SaveConfigMessage).value
+        const pluginConfig = (await loadConfig())[pluginId] || {
+            enabledQQIds: [],
+            localSavedData: {},
+            savedData: undefined
+        }
+        if (qqId) {
+            if (pluginData === undefined) {
+                delete pluginConfig.localSavedData[qqId]
+            } else {
+                pluginConfig.localSavedData[qqId] = pluginData
+            }
+        } else {
+            if (pluginData === undefined) {
+                delete pluginConfig.savedData
+            } else {
+                pluginConfig.savedData = pluginData
+            }
+        }
+        await saveConfig()
     }
 }
 
@@ -190,12 +215,13 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
     return pluginWorker
 }
 
-export function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
+export async function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
     const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
             logger: `[NP:${shortName}]`
         }
     })
+    const pluginData = (await loadConfig())[pluginId].savedData
     pluginWorker.postMessage({
         id: randonID(),
         type: 'deploy-worker',
@@ -203,14 +229,18 @@ export function createPluginWorker (pluginPath: string, pluginId: string, shortN
             workerType: messages.WorkerType.Plugin,
             pluginPath: pluginPath,
             config: {
-                admins: [...config.admins]
+                admins: [...config.admins],
+                pluginData
             }
         }
     } as messages.DeployWorkerMessage<messages.DeployPluginWorkerData>)
+    pluginWorker.once('exit', () => {
+        pluginWorkers.delete(pluginId)
+    })
     pluginWorker.once('error', (err) => {
         logger.warn(`插件 ${name || shortName || pluginId} 线程发生错误，正在尝试重启`, err)
-        setTimeout(() => {
-            pluginWorkers.set(pluginId, createPluginWorker(pluginPath, pluginId, shortName, name))
+        setTimeout(async () => {
+            pluginWorkers.set(pluginId, await createPluginWorker(pluginPath, pluginId, shortName, name))
         }, 5000)
     })
     pluginWorker.on('message', async (data: messages.BaseMessage) => {
@@ -254,6 +284,9 @@ export function createBotWorker (qqId: number) {
             config: botConfig
         }
     } as messages.DeployWorkerMessage<messages.DeployBotWorkerData>)
+    botWorker.once('exit', () => {
+        botWorkers.delete(qqId)
+    })
     botWorker.once('error', (err) => {
         logger.warn(`机器人 #${qqId} 线程发生错误，正在尝试重启`, err)
         setTimeout(() => {
@@ -396,7 +429,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
         if (qqid) {
             if (!botProxies.has(qqid)) {
                 const proxy = new BotProxy(qqid, port)
-                if (plugin.enable) await plugin.enable(proxy)
+                if (plugin.enable) await plugin.enable(proxy, (message as messages.SetPluginMessage).value.pluginData)
                 botProxies.set(qqid, proxy)
             }
         }
@@ -408,6 +441,20 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             bot.sliderLogin(message.value.token)
         } else {
             logger.warn('机器人尚未初始化，无法验证！')
+        }
+        break
+    }
+    case 'stop-bot':
+    {
+        if (bot) {
+            for (const port of pluginPorts) {
+                port.close()
+            }
+            setTimeout(() => {
+                logger.info('等待登出超时，强制停止机器人线程中')
+                process.exit()
+            }, 5 * 1000)
+            await bot.logout()
         }
         break
     }
@@ -544,18 +591,38 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
     }
     case 'disable-plugin':
     {
-        const qqid = (message as messages.SetPluginMessage).value.qqId
-        if (qqid) {
-            if (botProxies.has(qqid)) {
-                const proxy = botProxies.get(qqid)
+        const qqId = (message as messages.SetPluginMessage).value.qqId
+        if (qqId) {
+            if (botProxies.has(qqId)) {
+                const proxy = botProxies.get(qqId)
                 if (proxy) {
-                    if (plugin.disable) await plugin.disable(proxy)
+                    if (plugin.disable) {
+                        const pluginData = await plugin.disable(proxy)
+                        parentPort?.postMessage({
+                            type: 'save-config',
+                            value: {
+                                pluginId: plugin.id,
+                                qqId,
+                                pluginData
+                            }
+                        } as messages.SaveConfigMessage)
+                    }
                     proxy.close()
-                    botProxies.delete(qqid)
+                    botProxies.delete(qqId)
                 }
             }
             if (botProxies.size === 0) {
-                if (plugin.uninit) await plugin.uninit()
+                logger.info('已无任何机器人启用此插件，正在关闭插件线程以节省资源')
+                if (plugin.uninit) {
+                    const pluginData = await plugin.uninit()
+                    parentPort?.postMessage({
+                        type: 'save-config',
+                        value: {
+                            pluginId: plugin.id,
+                            pluginData
+                        }
+                    } as messages.SaveConfigMessage)
+                }
             }
         }
         break

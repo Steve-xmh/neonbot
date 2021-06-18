@@ -33,7 +33,7 @@ const reload: Command = {
                 if (pluginId in plugins) {
                     const pluginConfig = pluginConfigs[pluginId]
                     const plugin = plugins[pluginId]
-                    const newPluginWorker = createPluginWorker(plugin.pluginPath, plugin.id, plugin.shortName, plugin.name)
+                    const newPluginWorker = await createPluginWorker(plugin.pluginPath, plugin.id, plugin.shortName, plugin.name)
                     if (pluginConfig) {
                         const canEnable = !!pluginConfig.enabledQQIds.find(v => [...botWorkers.keys()].includes(v))
                         if (canEnable) {

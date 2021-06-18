@@ -4,7 +4,9 @@
  */
 
 import admin from './admin'
+import frontend from './frontend'
 
 export default [
-    admin
+    admin,
+    frontend
 ]

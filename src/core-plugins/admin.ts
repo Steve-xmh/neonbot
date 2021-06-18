@@ -156,20 +156,18 @@ let offlineTime: Date
 function getDuration (t: Date) {
     let d = Math.floor((new Date().getTime() - t.getTime()) / 1000)
     let result = '前'
-    if (d % 60) {
-        result = d % 60 + ' 秒' + result
-    }
+    result = d % 60 + ' 秒' + result
     d = Math.floor(d / 60)
     if (d % 60) {
         result = d % 60 + ' 分 ' + result
-    }
-    d = Math.floor(d / 60)
-    if (d % 24) {
-        result = d % 24 + ' 时 ' + result
-    }
-    d = Math.floor(d / 24)
-    if (d > 0) {
-        result = d + ' 天 ' + result
+        d = Math.floor(d / 60)
+        if (d % 24) {
+            result = d % 24 + ' 时 ' + result
+            d = Math.floor(d / 24)
+            if (d > 0) {
+                result = d + ' 天 ' + result
+            }
+        }
     }
     return result
 }

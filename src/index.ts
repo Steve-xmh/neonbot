@@ -1,4 +1,4 @@
-import { isMainThread, parentPort, workerData } from 'worker_threads'
+import { isMainThread, parentPort, threadId, workerData } from 'worker_threads'
 import * as log4js from 'log4js'
 import { ConfBot } from 'oicq'
 import { resolve } from 'path'
@@ -6,7 +6,7 @@ import { setupConsole } from './console'
 import corePlugins from './core-plugins'
 import { createBotWorker, createCorePluginWorker, NeonWorker, onWorkerMessage } from './worker'
 import { enablePlugin, listPlugins } from './plugin'
-import { loadConfig } from './config'
+import { clearConfigLock, loadConfig } from './config'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
 logger.level = 'info'
@@ -76,6 +76,7 @@ export const indexPath = __filename
 export let config: NeonBotConfig
 
 async function main () {
+    logger.info('线程 ID', threadId)
     if (isMainThread) {
         logger.info('NeonBot - by SteveXMH')
         if (process.argv.length < 3) {
@@ -106,6 +107,7 @@ async function main () {
             }
             config.dataDir = config.dataDir || resolve(configPath, '../data')
             logger.info('机器人数据文件夹：', config.dataDir)
+            clearConfigLock()
             // Launch bots
             logger.info('正在启动机器人线程')
             for (const qqid in config.accounts) {

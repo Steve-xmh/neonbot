@@ -16,13 +16,13 @@ import { loadConfig, saveConfig } from './config'
 /**
  * 一个初始化时会被传递的配置对象
  */
-export interface InitConfig {
+export interface InitConfig<D = any> {
     /** 配置文件中定义的管理员 QQID 列表 */
     admins: number[]
     /** 可以随意使用的 log4js.Logger 记录对象 */
     logger: Logger,
     /** 插件上一次退出时保存的全局数据 */
-    pluginData: any
+    pluginData: D
 }
 
 /**
@@ -126,7 +126,7 @@ export async function enablePlugin (qqId: number, pluginId: string) {
         pluginConfigs[pluginId].enabledQQIds.push(qqId)
         await saveConfig()
         if (!pluginWorkers.has(pluginId)) {
-            const pluginWorker = createPluginWorker(plugin.pluginPath, plugin.id, plugin.shortName, plugin.name)
+            const pluginWorker = await createPluginWorker(plugin.pluginPath, plugin.id, plugin.shortName, plugin.name)
             pluginWorkers.set(pluginId, pluginWorker)
         }
         const pluginWorker = pluginWorkers.get(pluginId)
@@ -138,9 +138,10 @@ export async function enablePlugin (qqId: number, pluginId: string) {
                 pluginType: messages.WorkerType.Plugin
             }
         } as messages.ConnectPluginMessage, [ports.port1])
+        const pluginData = pluginConfigs[pluginId].localSavedData[qqId]
         pluginWorker!!.postMessage({
             type: 'enable-plugin',
-            value: { qqId, port: ports.port2 }
+            value: { qqId, port: ports.port2, pluginData }
         } as messages.SetPluginMessage, [ports.port2])
         logger.info('已对 ' + qqId + ' 启用插件(线程)  ' + pluginId)
     } else {
@@ -170,6 +171,26 @@ export async function disablePlugin (qqId: number, pluginId: string) {
             type: 'disable-plugin',
             value: { qqId }
         } as messages.SetPluginMessage)
+    } else {
+        throw new Error('未找到插件 ' + pluginId)
+    }
+}
+
+/**
+ * 如果正在运行，发送 disable-plugin 禁用插件并关闭线程
+ */
+export async function stopPlugin (qqId: number, pluginId: string) {
+    const plugins = await listPlugins()
+    if (pluginId in plugins) {
+        const plugin = pluginWorkers.get(pluginId)
+        if (plugin) {
+            plugin.postMessage({
+                type: 'disable-plugin',
+                value: {
+                    qqId
+                }
+            } as messages.SetPluginMessage)
+        }
     } else {
         throw new Error('未找到插件 ' + pluginId)
     }
