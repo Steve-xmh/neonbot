@@ -11,11 +11,11 @@ export function formatBinarySize (v: number) {
     const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB']
     for (let i = 0; i < units.length; i++) {
         if (v < 1024) {
-            return v + ' ' + units[i]
+            return v.toFixed(2) + ' ' + units[i]
         }
         v /= 1024
     }
-    return v * 1024 + ' ' + units[units.length - 1]
+    return (v * 1024).toFixed(2) + ' ' + units[units.length - 1]
 }
 
 export const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
