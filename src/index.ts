@@ -9,7 +9,7 @@ import { enablePlugin, listPlugins } from './plugin'
 import { clearConfigLock, loadConfig } from './config'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
-logger.level = 'info'
+logger.level = workerData.loggerLevel || 'info'
 
 export interface AccountConfig {
     /**
@@ -34,6 +34,10 @@ export interface NeonBotConfig {
      * 用于保存插件自身配置数据的文件路径，默认和配置文件同目录且命名为 `plugins.json`
      */
     pluginDataFile?: string
+    /**
+     * 日志输出的等级，将会通用至所有线程，机器人线程中的日志输出等级将会优先于此配置，默认为 `info`
+     */
+    loggerLevel?: string
     /**
      * 最高管理员的 QQ 号码，只有在此列表的用户可以与核心插件交互
      */
@@ -89,6 +93,9 @@ async function main () {
             } catch (err) {
                 logger.fatal('无法加载配置文件，请检查配置文件是否正确：', err)
                 process.exit(1)
+            }
+            if (config.loggerLevel) {
+                logger.level = config.loggerLevel
             }
             setupConsole()
             config.admins = config.admins || []

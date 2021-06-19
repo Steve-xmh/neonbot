@@ -12,6 +12,7 @@ import { messages } from './messages'
 import { readdir, stat } from 'fs/promises'
 import { resolve } from 'path'
 import { loadConfig, saveConfig } from './config'
+import { format } from 'util'
 
 /**
  * 一个初始化时会被传递的配置对象
@@ -73,6 +74,42 @@ export interface PluginInfos {
         name?: string,
         pluginPath: string
     }
+}
+
+export async function listPluginErrorOutputs () {
+    const result: string[] = []
+    for (const subdir of config.pluginSearchPath || []) {
+        try {
+            const plugins = await readdir(subdir)
+            for (const pluginDir of plugins) {
+                try {
+                    const pluginPath = resolve(subdir, pluginDir)
+                    const fullPath = require.resolve(pluginPath)
+                    if (!(await stat(pluginPath)).isDirectory()) {
+                        result.push(format('位于', resolve(subdir, pluginDir), '的文件夹不存在插件'))
+                        continue
+                    }
+                    delete require.cache[fullPath]
+                    const plugin = require(pluginPath) as NeonPlugin
+                    if (!plugin.id) {
+                        result.push(format('位于', resolve(subdir, pluginDir), '的插件没有提供插件 ID'))
+                        continue
+                    }
+                    if (!plugin.shortName) {
+                        result.push(format('位于', resolve(subdir, pluginDir), '的插件没有提供插件短名'))
+                        continue
+                    }
+                } catch (err) {
+                    // logger.warn('读取插件时发生错误', subdir, err)
+                    result.push(format('无法读取位于 ' + resolve(subdir, pluginDir), '的插件：', err))
+                }
+            }
+        } catch (err) {
+            logger.warn('搜索插件文件夹时发生错误', subdir, err)
+            result.push(format('无法搜索插件文件夹', resolve(subdir)))
+        }
+    }
+    return result
 }
 
 export async function listPlugins () {

@@ -7,9 +7,20 @@ import NeonPlugin, { InitConfig } from '../plugin'
 import * as oicq from 'oicq'
 import { BotProxy } from '../botproxy'
 import * as os from 'os'
+import { formatBinarySize, getDuration } from '../utils'
 
 let config: InitConfig
 const startTime = Date.now() / 1000
+
+const pluginsCmdHelp = [
+    '帮助：.plugins [enable|disable|reload [插件ID]]',
+    '.plugins - 列出所有可用插件',
+    '.plugins warns - 列出在插件文件夹内但是无法正确识别的插件',
+    '.plugins enable (插件ID) - 对本机器人账户启用指定插件',
+    '.plugins disable (插件ID) - 对本机器人账户禁用指定插件',
+    '.plugins reload (插件ID) - 对所本机器人重载指定插件',
+    '.plugins restart (插件ID) - 对所有机器人重新启动指定插件'
+]
 
 function getCpuInfo () {
     const cpus = os.cpus()
@@ -99,16 +110,27 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         }
                         break
                     }
+                    case 'warns':
+                    {
+                        const warns = await this.listPluginErrorOutputs()
+                        if (warns.length > 0) {
+                            await evt.reply([
+                                '插件读取错误清单',
+                                ...warns
+                            ].join('\n'))
+                        } else {
+                            await evt.reply('没有任何插件读取错误')
+                        }
+                        break
+                    }
+                    default:
+                        await evt.reply([
+                            '未知的子指令：' + args[0],
+                            ...pluginsCmdHelp
+                        ].join('\n'))
                     }
                 } else {
-                    await evt.reply([
-                        '帮助：.plugins [enable|disable|reload [插件ID]]',
-                        '.plugins - 列出所有可用插件',
-                        '.plugins enable (插件ID) - 对本机器人账户启用指定插件',
-                        '.plugins disable (插件ID) - 对本机器人账户禁用指定插件',
-                        '.plugins reload (插件ID) - 对所本机器人重载指定插件',
-                        '.plugins restart (插件ID) - 对所有机器人重新启动指定插件'
-                    ].join('\n'))
+                    await evt.reply(pluginsCmdHelp.join('\n'))
                 }
                 break
             }
@@ -125,6 +147,9 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                 reply += '框架运行时间：' + formatedTime
                 const usage = await getCPUUsage()
                 reply += '\n' + 'CPU 当前占用：' + (usage * 100).toFixed(1) + '%'
+                const totalMem = os.totalmem()
+                const usedMem = totalMem - os.freemem()
+                reply += '\n' + '内存占用：' + formatBinarySize(usedMem) + '/' + formatBinarySize(totalMem) + ' (' + (usedMem / totalMem * 100).toFixed(2) + '%)'
                 evt.reply(reply)
                 break
             }
@@ -133,6 +158,7 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                 await evt.reply([
                     '--- NeonBot 使用帮助 ---',
                     '.plugins - 列出所有可用插件',
+                    '.plugins warns - 列出在插件文件夹内但是无法正确识别的插件',
                     '.plugins enable (插件ID) - 对本机器人账户启用指定插件',
                     '.plugins disable (插件ID) - 对本机器人账户禁用指定插件',
                     '.plugins reload (插件ID) - 对所本机器人重载指定插件',
@@ -153,25 +179,6 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
 
 let offlineTime: Date
 
-function getDuration (t: Date) {
-    let d = Math.floor((new Date().getTime() - t.getTime()) / 1000)
-    let result = '前'
-    result = d % 60 + ' 秒' + result
-    d = Math.floor(d / 60)
-    if (d % 60) {
-        result = d % 60 + ' 分 ' + result
-        d = Math.floor(d / 60)
-        if (d % 24) {
-            result = d % 24 + ' 时 ' + result
-            d = Math.floor(d / 24)
-            if (d > 0) {
-                result = d + ' 天 ' + result
-            }
-        }
-    }
-    return result
-}
-
 async function onOffline (this: BotProxy, evt: oicq.OfflineEventData) {
     offlineTime = new Date()
 }
@@ -179,7 +186,7 @@ async function onOffline (this: BotProxy, evt: oicq.OfflineEventData) {
 async function onOnline (this: BotProxy, evt: oicq.OnlineEventData) {
     for (const admin of config.admins) {
         if (offlineTime) {
-            await this.sendPrivateMsg(admin, `NeonBot 在${getDuration(offlineTime)} (${offlineTime.toLocaleString('zh-cn')}) 断开连接，现已重新上线`)
+            await this.sendPrivateMsg(admin, `NeonBot 在 ${getDuration(offlineTime)} (${offlineTime.toLocaleString('zh-cn')}) 断开连接，现已重新上线`)
         } else {
             await this.sendPrivateMsg(admin, 'NeonBot 已上线，正在运行框架，发送 .help 以查看指令帮助')
         }
@@ -194,7 +201,7 @@ const plugin: NeonPlugin = {
         config = initConfig
     },
     async enable (bot) {
-        bot.randomHashedMessage = true // 防止消息被清除
+        bot.randomHashedMessage = true // 防止消息被 PC 端忽略
         bot.on('message.private', onPrivateMessage)
         bot.on('system.online', onOnline)
         bot.on('system.offline', onOffline)

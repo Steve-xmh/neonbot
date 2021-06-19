@@ -1,12 +1,17 @@
 import { Client, createClient, Gfs } from 'oicq'
-import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
+import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel, workerData } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
 import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
-import NeonPlugin, { disablePlugin, enablePlugin, listPlugins, shutdownPlugin } from './plugin'
+import NeonPlugin, { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin } from './plugin'
 import { randonID } from './utils'
+
+export interface WorkerStatus {
+    usedMemory: number
+}
+
 export class NeonWorker extends Worker {
     public ready: boolean = false
     private waitReadyPromises: [Function, Function][] = []
@@ -108,6 +113,25 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             succeed: true,
             value: data.value
         } as messages.BaseResult)
+    } else if (data.type === 'get-workers-status') {
+        const result: messages.GetWorkersStatusResult['value'] = {
+            corePluginWorkers: {},
+            pluginWorkers: {},
+            botWorkers: {}
+        }
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: result
+        } as messages.BaseResult)
+    } else if (data.type === 'list-plugin-error-outputs') {
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: await listPluginErrorOutputs()
+        } as messages.BaseResult)
     } else if (data.type === 'save-config') {
         const {
             qqId,
@@ -151,7 +175,8 @@ const invokeIds = new Map<string, string>()
 export function createCorePluginWorker (plugin: NeonPlugin) {
     const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NCP:${plugin.shortName}]`
+            logger: `[NCP:${plugin.shortName}]`,
+            loggerLevel: config.loggerLevel
         }
     })
     pluginWorker.postMessage({
@@ -218,7 +243,8 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
 export async function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
     const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NP:${shortName}]`
+            logger: `[NP:${shortName}]`,
+            loggerLevel: config.loggerLevel
         }
     })
     const pluginData = (await loadConfig())[pluginId].savedData
@@ -272,7 +298,8 @@ export function createBotWorker (qqId: number) {
     }
     const botWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NBot#${qqId}]`
+            logger: `[NBot#${qqId}]`,
+            loggerLevel: config.loggerLevel
         }
     })
     botWorker.postMessage({
@@ -337,7 +364,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             const qqid = (data as messages.DeployBotWorkerData).qqid
             const config = (data as messages.DeployBotWorkerData).config
             bot = createClient(qqid, {
-                log_level: 'debug',
+                log_level: logger.level as any || 'debug',
                 ...config
             })
             bot.on('system.online', () => {

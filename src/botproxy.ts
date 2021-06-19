@@ -240,7 +240,7 @@ export class BotProxy extends EventEmitter {
                     this.firstSynced = true
                     this.emit(this.firstSync)
                 }
-                logger.info('Synced Data', this)
+                logger.debug('已同步机器人数据', syncData)
             } else if ([
                 'disable-plugin'
             ].includes(data.type)) {
@@ -345,6 +345,11 @@ export class BotProxy extends EventEmitter {
     /** 获取可用的插件列表 */
     getListPlugin () {
         return this.invokeParentPort('list-plugins') as Promise<PluginInfos>
+    }
+
+    /** 获取因出错而无法读取的插件错误输出 */
+    listPluginErrorOutputs () {
+        return this.invokeParentPort('list-plugin-error-outputs') as Promise<string[]>
     }
 
     /** 对机器人启用插件 */
