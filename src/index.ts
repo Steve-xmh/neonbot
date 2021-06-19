@@ -9,7 +9,7 @@ import { enablePlugin, listPlugins } from './plugin'
 import { clearConfigLock, loadConfig } from './config'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
-logger.level = workerData.loggerLevel || 'info'
+logger.level = workerData?.loggerLevel || 'info'
 
 export interface AccountConfig {
     /**
