@@ -64,6 +64,27 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                     const plugins = await this.getListPlugin()
                     const msgs = Object.keys(plugins).map(pluginId => `${plugins[pluginId].id} - ${plugins[pluginId].name || plugins[pluginId].shortName}`)
                     await evt.reply('目前已搜索到的插件：\n' + msgs.join('\n'))
+                } else if (args.length === 2) {
+                    switch (args[1]) {
+                    case 'warns':
+                    {
+                        const warns = await this.listPluginErrorOutputs()
+                        if (warns.length > 0) {
+                            await evt.reply([
+                                '插件读取错误清单',
+                                ...warns
+                            ].join('\n'))
+                        } else {
+                            await evt.reply('没有任何插件读取错误')
+                        }
+                        break
+                    }
+                    default:
+                        await evt.reply([
+                            '未知的子指令：' + args[1],
+                            ...pluginsCmdHelp
+                        ].join('\n'))
+                    }
                 } else if (args.length === 3) {
                     switch (args[1]) {
                     case 'enable':
@@ -110,22 +131,9 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         }
                         break
                     }
-                    case 'warns':
-                    {
-                        const warns = await this.listPluginErrorOutputs()
-                        if (warns.length > 0) {
-                            await evt.reply([
-                                '插件读取错误清单',
-                                ...warns
-                            ].join('\n'))
-                        } else {
-                            await evt.reply('没有任何插件读取错误')
-                        }
-                        break
-                    }
                     default:
                         await evt.reply([
-                            '未知的子指令：' + args[0],
+                            '未知的子指令：' + args[1],
                             ...pluginsCmdHelp
                         ].join('\n'))
                     }

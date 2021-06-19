@@ -1,5 +1,5 @@
 import { Client, createClient, Gfs } from 'oicq'
-import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel, workerData } from 'worker_threads'
+import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { accpetableEvents, BotProxy } from './botproxy'
 import { loadConfig, saveConfig } from './config'
