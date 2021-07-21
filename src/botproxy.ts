@@ -197,6 +197,7 @@ export class BotProxy extends EventEmitter {
 
     constructor (public readonly qqid: number, private readonly port: MessagePort) {
         super()
+        logger.debug('创建了新机器人代理对象', qqid, port)
         this.uin = qqid
         process.once('uncaughtException', () => {
             this.close() // 出错时关闭通讯接口
@@ -290,6 +291,8 @@ export class BotProxy extends EventEmitter {
                 evt.reply = (message: any, autoEscape = false) => this.sendPrivateMsg((evt as any).user_id, message, autoEscape)
             }
         }
+        const listeners = this.listeners(evt.eventName)
+        logger.debug(listeners)
         this.emit(evt.eventName, evt)
     }
 
@@ -320,6 +323,7 @@ export class BotProxy extends EventEmitter {
         return await new Promise((resolve, reject) => {
             const msg = messages.makeMessage(type, value)
             this.awaitingPromises.set(msg.id, [resolve, reject])
+            logger.debug('BotProxy -> MessagePort', msg)
             this.port.postMessage(msg)
         })
     }
@@ -337,6 +341,7 @@ export class BotProxy extends EventEmitter {
             } else {
                 const msg = messages.makeMessage(type, value)
                 this.awaitingPromises.set(msg.id, [resolve, reject])
+                logger.debug('BotProxy -> ParentPort', msg)
                 parentPort.postMessage(msg)
             }
         })

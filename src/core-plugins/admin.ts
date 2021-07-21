@@ -216,6 +216,8 @@ const plugin: NeonPlugin = {
     },
     async disable (bot) {
         bot.off('message.private', onPrivateMessage)
+        bot.off('system.online', onOnline)
+        bot.off('system.offline', onOffline)
     }
 }
 

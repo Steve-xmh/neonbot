@@ -144,6 +144,8 @@ async function main () {
                     }
                 }
             }
+            logger.info('初始化完成！输入 help 以查看命令行帮助')
+            logger.info('你也可以通过管理员账户发送 .help 查看聊天管理帮助')
         }
     } else {
         parentPort!!.on('message', onWorkerMessage)
