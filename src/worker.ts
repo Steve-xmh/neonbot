@@ -598,7 +598,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             type: 'node-oicq-sync',
             value: {
                 uin: bot?.uin,
-                password_md5: new Uint8Array(bot?.password_md5),
+                password_md5: new Uint8Array(bot.password_md5 || Buffer.alloc(0)),
                 nickname: bot?.nickname,
                 online: bot?.isOnline(),
                 sex: bot?.sex,
