@@ -329,10 +329,6 @@ export function createBotWorker (qqId: number) {
                         plugin.postMessage(data)
                     }
                 }
-            } else {
-                for (const [, plugin] of corePluginWorkers) {
-                    plugin.postMessage(data)
-                }
             }
             for (const [, plugin] of pluginWorkers) {
                 plugin.postMessage(data)
@@ -354,6 +350,9 @@ export function createBotWorker (qqId: number) {
 }
 
 export async function onWorkerMessage (this: NeonWorker, message: messages.BaseMessage) {
+    if ('succeed' in message) {
+        return // 这是消息，不处理
+    }
     logger.debug(message)
     switch (message.type) {
     case 'deploy-worker':
@@ -656,13 +655,16 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
     }
     case 'reload-plugin':
     {
-        const qqid = (message as messages.SetPluginMessage).value.qqId
+        const value = (message as messages.SetPluginMessage).value
+        const qqid = value.qqId
         if (qqid) {
             if (botProxies.has(qqid)) {
                 const proxy = botProxies.get(qqid)
                 if (proxy) {
                     if (plugin.disable) await plugin.disable(proxy)
-                    botProxies.delete(qqid)
+                    const newProxy = new BotProxy(qqid, value.port)
+                    botProxies.set(qqid, newProxy)
+                    if (plugin.enable) await plugin.enable(newProxy, value.pluginData)
                 }
             }
         }

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "lockfile": "^1.0.4",
+    "nanoid": "^3.1.23",
     "oicq": "*",
     "typescript": "^4.3.2"
   },

@@ -157,7 +157,9 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                 reply += '\n' + 'CPU 当前占用：' + (usage * 100).toFixed(1) + '%'
                 const totalMem = os.totalmem()
                 const usedMem = totalMem - os.freemem()
-                reply += '\n' + '内存占用：' + formatBinarySize(usedMem) + '/' + formatBinarySize(totalMem) + ' (' + (usedMem / totalMem * 100).toFixed(2) + '%)'
+                const rss = process.memoryUsage.rss()
+                reply += '\n' + 'NeonBot 内存占用：' + formatBinarySize(rss) + '/' + formatBinarySize(totalMem) + ' (' + (rss / totalMem * 100).toFixed(2) + '%)'
+                reply += '\n' + '系统内存占用：' + formatBinarySize(usedMem) + '/' + formatBinarySize(totalMem) + ' (' + (usedMem / totalMem * 100).toFixed(2) + '%)'
                 evt.reply(reply)
                 break
             }

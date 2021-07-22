@@ -3,9 +3,9 @@
  * 常用的东西
  */
 
-import { randomBytes } from 'crypto'
+import { nanoid } from 'nanoid'
 
-export const randonID = () => randomBytes(20).toString('base64')
+export const randonID = nanoid
 
 export function formatBinarySize (v: number) {
     const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB']
