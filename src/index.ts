@@ -1,6 +1,6 @@
 import { isMainThread, parentPort, threadId, workerData } from 'worker_threads'
 import * as log4js from 'log4js'
-import { ConfBot } from 'oicq'
+import { ConfBot, constants } from 'oicq'
 import { resolve } from 'path'
 import { setupConsole } from './console'
 import corePlugins from './core-plugins'
@@ -58,19 +58,19 @@ export interface NeonBotConfig {
 export enum Platform {
     /** 安卓手机设备（默认） */
     // eslint-disable-next-line no-unused-vars
-    AndroidPhone = 1,
+    AndroidPhone = constants.PLATFORM_ANDROID,
     /** 安卓平板设备 */
     // eslint-disable-next-line no-unused-vars
-    AndroidTablet = 2,
+    AndroidTablet = constants.PLATFORM_APAD,
     /** 安卓手表设备 */
     // eslint-disable-next-line no-unused-vars
-    AndroidWatch = 3,
+    AndroidWatch = constants.PLATFORM_WATCH,
     /** 苹果电脑系统 */
     // eslint-disable-next-line no-unused-vars
-    MacOS = 4,
+    MacOS = constants.PLATFORM_IMAC,
     /** 苹果平板设备 */
     // eslint-disable-next-line no-unused-vars
-    IPad = 5
+    IPad = constants.PLATFORM_IPAD
 }
 
 export const pluginWorkers = new Map<string, NeonWorker>()

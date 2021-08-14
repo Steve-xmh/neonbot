@@ -107,7 +107,7 @@ export namespace messages {
 
     export type OICQMessage = MessageElem | Iterable<MessageElem> | string
 
-    export interface NodeOICQEventMessage<T = CommonEventData> extends BaseMessage {
+    export interface NodeOICQEventMessage<T extends CommonEventData = CommonEventData> extends BaseMessage {
         type: 'node-oicq-event'
         value: (T extends CommonEventData ? T : CommonEventData) & {
             eventName: string

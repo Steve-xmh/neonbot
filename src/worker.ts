@@ -1,7 +1,7 @@
 import { Client, createClient, Gfs } from 'oicq'
 import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
-import { accpetableEvents, BotProxy } from './botproxy'
+import { acceptableEvents, BotProxy } from './botproxy'
 import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
@@ -389,7 +389,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 }
                 }
             })
-            for (const eventName of accpetableEvents) {
+            for (const eventName of acceptableEvents) {
                 bot.on(eventName, (data) => {
                     data.eventName = eventName
                     if ('reply' in data) {

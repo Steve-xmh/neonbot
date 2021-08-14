@@ -1,6 +1,6 @@
 {
   "name": "neonbot",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "dist/index.js",
   "repository": "git@github.com:Steve-xmh/neonbot.git",
   "author": "SteveXMH <stevexmh@qq.com>",
@@ -10,13 +10,13 @@
     "postinstall": "tsc",
     "start": "node --enable-source-maps dist/index.js",
     "watch": "tsc --watch",
-    "up": "git pull && yarn upgrade && yarn dist",
+    "up": "git pull && yarn && yarn upgrade && yarn dist",
     "dist": "tsc"
   },
   "dependencies": {
     "lockfile": "^1.0.4",
     "nanoid": "^3.1.23",
-    "oicq": "*",
+    "oicq": "^1.19",
     "typescript": "^4.3.2"
   },
   "devDependencies": {
