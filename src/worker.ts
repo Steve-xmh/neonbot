@@ -1,12 +1,17 @@
 import { Client, createClient, Gfs } from 'oicq'
 import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
-import { accpetableEvents, BotProxy } from './botproxy'
-import { loadConfig } from './config'
+import { acceptableEvents, BotProxy } from './botproxy'
+import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
-import NeonPlugin, { disablePlugin, enablePlugin, listPlugins, shutdownPlugin } from './plugin'
+import { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin, NeonPlugin } from './plugin'
 import { randonID } from './utils'
+
+export interface WorkerStatus {
+    usedMemory: number
+}
+
 export class NeonWorker extends Worker {
     public ready: boolean = false
     private waitReadyPromises: [Function, Function][] = []
@@ -108,6 +113,50 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             succeed: true,
             value: data.value
         } as messages.BaseResult)
+    } else if (data.type === 'get-workers-status') {
+        const result: messages.GetWorkersStatusResult['value'] = {
+            corePluginWorkers: {},
+            pluginWorkers: {},
+            botWorkers: {}
+        }
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: result
+        } as messages.BaseResult)
+    } else if (data.type === 'list-plugin-error-outputs') {
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: await listPluginErrorOutputs()
+        } as messages.BaseResult)
+    } else if (data.type === 'save-config') {
+        const {
+            qqId,
+            pluginId,
+            pluginData
+        } = (data as messages.SaveConfigMessage).value
+        const pluginConfig = (await loadConfig())[pluginId] || {
+            enabledQQIds: [],
+            localSavedData: {},
+            savedData: undefined
+        }
+        if (qqId) {
+            if (pluginData === undefined) {
+                delete pluginConfig.localSavedData[qqId]
+            } else {
+                pluginConfig.localSavedData[qqId] = pluginData
+            }
+        } else {
+            if (pluginData === undefined) {
+                delete pluginConfig.savedData
+            } else {
+                pluginConfig.savedData = pluginData
+            }
+        }
+        await saveConfig()
     }
 }
 
@@ -126,7 +175,8 @@ const invokeIds = new Map<string, string>()
 export function createCorePluginWorker (plugin: NeonPlugin) {
     const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NCP:${plugin.shortName}]`
+            logger: `[NCP:${plugin.shortName}]`,
+            loggerLevel: config.loggerLevel
         }
     })
     pluginWorker.postMessage({
@@ -190,12 +240,14 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
     return pluginWorker
 }
 
-export function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
+export async function createPluginWorker (pluginPath: string, pluginId: string, shortName: string, name?: string) {
     const pluginWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NP:${shortName}]`
+            logger: `[NP:${shortName}]`,
+            loggerLevel: config.loggerLevel
         }
     })
+    const pluginData = (await loadConfig())[pluginId].savedData
     pluginWorker.postMessage({
         id: randonID(),
         type: 'deploy-worker',
@@ -203,14 +255,18 @@ export function createPluginWorker (pluginPath: string, pluginId: string, shortN
             workerType: messages.WorkerType.Plugin,
             pluginPath: pluginPath,
             config: {
-                admins: [...config.admins]
+                admins: [...config.admins],
+                pluginData
             }
         }
     } as messages.DeployWorkerMessage<messages.DeployPluginWorkerData>)
+    pluginWorker.once('exit', () => {
+        pluginWorkers.delete(pluginId)
+    })
     pluginWorker.once('error', (err) => {
         logger.warn(`插件 ${name || shortName || pluginId} 线程发生错误，正在尝试重启`, err)
-        setTimeout(() => {
-            pluginWorkers.set(pluginId, createPluginWorker(pluginPath, pluginId, shortName, name))
+        setTimeout(async () => {
+            pluginWorkers.set(pluginId, await createPluginWorker(pluginPath, pluginId, shortName, name))
         }, 5000)
     })
     pluginWorker.on('message', async (data: messages.BaseMessage) => {
@@ -242,7 +298,8 @@ export function createBotWorker (qqId: number) {
     }
     const botWorker = new NeonWorker(indexPath, {
         workerData: {
-            logger: `[NBot#${qqId}]`
+            logger: `[NBot#${qqId}]`,
+            loggerLevel: config.loggerLevel
         }
     })
     botWorker.postMessage({
@@ -254,6 +311,9 @@ export function createBotWorker (qqId: number) {
             config: botConfig
         }
     } as messages.DeployWorkerMessage<messages.DeployBotWorkerData>)
+    botWorker.once('exit', () => {
+        botWorkers.delete(qqId)
+    })
     botWorker.once('error', (err) => {
         logger.warn(`机器人 #${qqId} 线程发生错误，正在尝试重启`, err)
         setTimeout(() => {
@@ -268,10 +328,6 @@ export function createBotWorker (qqId: number) {
                     for (const [, plugin] of corePluginWorkers) {
                         plugin.postMessage(data)
                     }
-                }
-            } else {
-                for (const [, plugin] of corePluginWorkers) {
-                    plugin.postMessage(data)
                 }
             }
             for (const [, plugin] of pluginWorkers) {
@@ -294,6 +350,9 @@ export function createBotWorker (qqId: number) {
 }
 
 export async function onWorkerMessage (this: NeonWorker, message: messages.BaseMessage) {
+    if ('succeed' in message) {
+        return // 这是消息，不处理
+    }
     logger.debug(message)
     switch (message.type) {
     case 'deploy-worker':
@@ -304,7 +363,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             const qqid = (data as messages.DeployBotWorkerData).qqid
             const config = (data as messages.DeployBotWorkerData).config
             bot = createClient(qqid, {
-                log_level: 'debug',
+                log_level: logger.level as any || 'debug',
                 ...config
             })
             bot.on('system.online', () => {
@@ -330,7 +389,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 }
                 }
             })
-            for (const eventName of accpetableEvents) {
+            for (const eventName of acceptableEvents) {
                 bot.on(eventName, (data) => {
                     data.eventName = eventName
                     if ('reply' in data) {
@@ -387,16 +446,13 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             logger.warn('通信接口类型不正确')
             break
         }
+        logger.debug('连接到通信接口', port)
         const pluginMessage = (message as messages.SetPluginMessage).value
-        if (!(port && port instanceof MessagePort)) {
-            logger.warn('通信接口类型不正确')
-            break
-        }
         const qqid = pluginMessage.qqId
         if (qqid) {
             if (!botProxies.has(qqid)) {
                 const proxy = new BotProxy(qqid, port)
-                if (plugin.enable) await plugin.enable(proxy)
+                if (plugin.enable) await plugin.enable(proxy, (message as messages.SetPluginMessage).value.pluginData)
                 botProxies.set(qqid, proxy)
             }
         }
@@ -408,6 +464,20 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             bot.sliderLogin(message.value.token)
         } else {
             logger.warn('机器人尚未初始化，无法验证！')
+        }
+        break
+    }
+    case 'stop-bot':
+    {
+        if (bot) {
+            for (const port of pluginPorts) {
+                port.close()
+            }
+            setTimeout(() => {
+                logger.info('等待登出超时，强制停止机器人线程中')
+                process.exit()
+            }, 5 * 1000)
+            await bot.logout()
         }
         break
     }
@@ -525,7 +595,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             type: 'node-oicq-sync',
             value: {
                 uin: bot?.uin,
-                password_md5: new Uint8Array(bot?.password_md5),
+                password_md5: new Uint8Array(bot.password_md5 || Buffer.alloc(0)),
                 nickname: bot?.nickname,
                 online: bot?.isOnline(),
                 sex: bot?.sex,
@@ -544,31 +614,54 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
     }
     case 'disable-plugin':
     {
-        const qqid = (message as messages.SetPluginMessage).value.qqId
-        if (qqid) {
-            if (botProxies.has(qqid)) {
-                const proxy = botProxies.get(qqid)
+        const qqId = (message as messages.SetPluginMessage).value.qqId
+        if (qqId) {
+            if (botProxies.has(qqId)) {
+                const proxy = botProxies.get(qqId)
                 if (proxy) {
-                    if (plugin.disable) await plugin.disable(proxy)
+                    if (plugin.disable) {
+                        const pluginData = await plugin.disable(proxy)
+                        parentPort?.postMessage({
+                            type: 'save-config',
+                            value: {
+                                pluginId: plugin.id,
+                                qqId,
+                                pluginData
+                            }
+                        } as messages.SaveConfigMessage)
+                    }
                     proxy.close()
-                    botProxies.delete(qqid)
+                    botProxies.delete(qqId)
                 }
             }
             if (botProxies.size === 0) {
-                if (plugin.uninit) await plugin.uninit()
+                logger.info('已无任何机器人启用此插件，正在关闭插件线程以节省资源')
+                if (plugin.uninit) {
+                    const pluginData = await plugin.uninit()
+                    parentPort?.postMessage({
+                        type: 'save-config',
+                        value: {
+                            pluginId: plugin.id,
+                            pluginData
+                        }
+                    } as messages.SaveConfigMessage)
+                }
             }
         }
         break
     }
     case 'reload-plugin':
     {
-        const qqid = (message as messages.SetPluginMessage).value.qqId
+        const value = (message as messages.SetPluginMessage).value
+        const qqid = value.qqId
         if (qqid) {
             if (botProxies.has(qqid)) {
                 const proxy = botProxies.get(qqid)
                 if (proxy) {
                     if (plugin.disable) await plugin.disable(proxy)
-                    botProxies.delete(qqid)
+                    const newProxy = new BotProxy(qqid, value.port)
+                    botProxies.set(qqid, newProxy)
+                    if (plugin.enable) await plugin.enable(newProxy, value.pluginData)
                 }
             }
         }

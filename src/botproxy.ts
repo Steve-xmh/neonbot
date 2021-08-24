@@ -8,123 +8,139 @@ import { GFSProxy } from './gfsproxy'
 import { parse } from './cqcode'
 import { randomBytes } from 'crypto'
 
-export const accpetableMethods = [
-    'login',
-    'captchaLogin',
-    'sliderLogin',
-    'terminate',
-    'logout',
-    'isOnline',
-    'sendSMSCode',
-    'submitSMSCode',
-    'setOnlineStatus',
-    'getFriendList',
-    'getStrangerList',
-    'getGroupList',
-    'getGroupMemberList',
-    'getStrangerInfo',
-    'getGroupInfo',
-    'getGroupMemberInfo',
-    'sendPrivateMsg',
-    'sendGroupMsg',
-    'sendTempMsg',
-    'sendDiscussMsg',
-    'deleteMsg',
-    'getMsg',
-    'getChatHistory',
-    'getForwardMsg',
-    'sendGroupNotice',
-    'setGroupName',
-    'setGroupAnonymous',
-    'setGroupWholeBan',
-    'setGroupAdmin',
-    'setGroupSpecialTitle',
-    'setGroupCard',
-    'setGroupKick',
-    'setGroupBan',
-    'setGroupAnonymousBan',
-    'setGroupLeave',
-    'sendGroupPoke',
-    'setFriendAddRequest',
-    'setGroupAddRequest',
-    'getSystemMsg',
-    'addGroup',
+export const acceptableMethods = [
+    'acquireGfs',
     'addFriend',
-    'deleteFriend',
-    'inviteFriend',
-    'sendLike',
-    'setNickname',
-    'setGender',
-    'setBirthday',
-    'setDescription',
-    'setSignature',
-    'setPortrait',
-    'setGroupPortrait',
-    'getFile',
-    'preloadImages',
-    'getRoamingStamp',
-    'getGroupNotice',
-    'getCookies',
-    'getCsrfToken',
-    'cleanCache',
+    'addGroup',
     'canSendImage',
     'canSendRecord',
-    'acquireGfs',
-    'getVersionInfo',
-    'getStatus',
+    'captchaLogin',
+    'cleanCache',
+    'deleteFriend',
+    'deleteMsg',
+    'em',
+    'getChatHistory',
+    'getCookies',
+    'getCsrfToken',
+    'getFile',
+    'getForwardMsg',
+    'getFriendList',
+    'getGroupInfo',
+    'getGroupList',
+    'getGroupMemberInfo',
+    'getGroupMemberList',
+    'getGroupNotice',
     'getLoginInfo',
+    'getMsg',
+    'getRoamingStamp',
+    'getStatus',
+    'getStrangerInfo',
+    'getStrangerList',
+    'getSystemMsg',
+    'getVersionInfo',
+    'inviteFriend',
+    'isOnline',
+    'login',
+    'logout',
+    'preloadImages',
     'reloadFriendList',
-    'reloadGroupList'
+    'reloadGroupList',
+    'reportReaded',
+    'sendDiscussMsg',
+    'sendGroupMsg',
+    'sendGroupNotice',
+    'sendGroupPoke',
+    'sendLike',
+    'sendOidb',
+    'sendPrivateMsg',
+    'sendSMSCode',
+    'sendTempMsg',
+    'sendUni',
+    'setBirthday',
+    'setDescription',
+    'setFriendAddRequest',
+    'setGender',
+    'setGroupAddRequest',
+    'setGroupAdmin',
+    'setGroupAnonymous',
+    'setGroupAnonymousBan',
+    'setGroupBan',
+    'setGroupCard',
+    'setGroupKick',
+    'setGroupLeave',
+    'setGroupName',
+    'setGroupPortrait',
+    'setGroupSpecialTitle',
+    'setGroupWholeBan',
+    'setNickname',
+    'setOnlineStatus',
+    'setPortrait',
+    'setSignature',
+    'sliderLogin',
+    'submitSMSCode',
+    'terminate'
 ]
 
-export const accpetableEvents = [
-    'system.login.captcha',
-    'system.login.slider',
-    'system.login.device',
-    'system.login.error',
-    'system.login',
-    'system.online',
-    'system.offline',
-    'system.offline.network',
-    'system.offline.kickoff',
-    'system.offline.frozen',
-    'system.offline.device',
-    'system.offline.unknown',
-    'system',
-    'message.private.friend',
-    'message.private.single',
-    'message.private.group',
-    'message.private.other',
-    'message.private',
-    'message.group.normal',
+export const acceptableEvents = [
+    'internal.input',
+    'internal.sso',
+    'message',
+    'message.discuss',
+    'message.group',
     'message.group.anonymous',
     'message.group.discuss',
-    'message.group',
-    'message.discuss',
-    'message',
-    'request.friend.add',
-    'request.friend',
-    'request.group.add',
-    'request.group.invite',
-    'request.group',
-    'request',
-    'notice.friend.increase',
+    'message.group.normal',
+    'message.private',
+    'message.private.friend',
+    'message.private.group',
+    'message.private.other',
+    'message.private.self',
+    'message.private.single',
+    'notice',
+    'notice.friend',
     'notice.friend.decrease',
-    'notice.friend.recall',
-    'notice.friend.profile',
+    'notice.friend.increase',
     'notice.friend.poke',
-    'notice.group.increase',
-    'notice.group.decrease',
-    'notice.group.recall',
+    'notice.friend.profile',
+    'notice.friend.recall',
+    'notice.group',
     'notice.group.admin',
     'notice.group.ban',
-    'notice.group.transfer',
-    'notice.group.title',
+    'notice.group.decrease',
+    'notice.group.increase',
     'notice.group.poke',
+    'notice.group.recall',
     'notice.group.setting',
-    'notice.friend',
-    'notice.group',
-    'notice'
+    'notice.group.title',
+    'notice.group.transfer',
+    'request',
+    'request.friend',
+    'request.friend.add',
+    'request.friend.single',
+    'request.group',
+    'request.group.add',
+    'request.group.invite',
+    'sync',
+    'sync.black',
+    'sync.message',
+    'sync.profile',
+    'sync.readed',
+    'sync.readed.group',
+    'sync.readed.private',
+    'sync.status',
+    'system',
+    'system.login',
+    'system.login.captcha',
+    'system.login.device',
+    'system.login.error',
+    'system.login.slider',
+    'system.offline',
+    'system.offline.device',
+    'system.offline.frozen',
+    'system.offline.kickoff',
+    'system.offline.network',
+    'system.offline.unknown',
+    'system.online'
 ]
 
 export class BotProxyError extends Error { }
@@ -149,9 +165,9 @@ export class BotProxy extends EventEmitter {
     passwordMd5 = Buffer.alloc(0)
 
     online = false
-    nickname = ''
+    nickname: oicq.Client['nickname'] = ''
     sex: oicq.Gender = 'unknown'
-    age = 0;
+    age = 0
 
     /** 日志记录器 */
     logger = logger
@@ -172,8 +188,13 @@ export class BotProxy extends EventEmitter {
     sl = new Map<number, oicq.StrangerInfo>()
     /** 群列表 */
     gl = new Map<number, oicq.GroupInfo>()
-
+    /** 群成员列表 */
     gml = new Map<number, Map<number, oicq.MemberInfo>>()
+
+    /**
+     * 黑名单列表
+     */
+    blacklist = new Set<number>()
 
     /** 当前账号本地存储路径 */
     dir = ''
@@ -197,11 +218,13 @@ export class BotProxy extends EventEmitter {
 
     constructor (public readonly qqid: number, private readonly port: MessagePort) {
         super()
+        logger.debug('创建了新机器人代理对象', qqid, port)
         this.uin = qqid
-        process.once('uncaughtException', () => {
-            this.close() // 出错时关闭通讯接口
+        this.port.once('messageerror', (err) => {
+            logger.warn('警告：通信接口发生错误', err)
         })
         this.port.once('close', () => {
+            logger.debug('警告：通信接口已关闭')
             this.channelClosed = true
         })
         const messageCallback = (data: messages.BaseMessage) => {
@@ -240,7 +263,11 @@ export class BotProxy extends EventEmitter {
                     this.firstSynced = true
                     this.emit(this.firstSync)
                 }
-                logger.info('Synced Data', this)
+                logger.debug('已同步机器人数据', syncData)
+            } else if ([
+                'disable-plugin'
+            ].includes(data.type)) {
+                // 在插件工作线程主事件处理器内处理
             } else {
                 logger.warn('接收到未知的代理机器人消息：', data)
             }
@@ -257,25 +284,37 @@ export class BotProxy extends EventEmitter {
             this.getStatus()
             this.online = true
             break
-        case 'system.offline':
-            this.onlineStatus = this.online_status = 0
-            this.online = false
+        case 'sync.status':
+            this.onlineStatus = this.online_status = (evt as unknown as oicq.SyncStatusEventData).new_status
+            this.online = this.onlineStatus === oicq.constants.STATUS_ONLINE
             break
         case 'notice.friend.increase':
             this.getFriendList()
             break
         case 'notice.friend.decrease':
-            this.fl.delete((evt as any).user_id)
+            this.fl.delete((evt as unknown as oicq.FriendDecreaseEventData).user_id)
             break
         case 'notice.group.increase':
-            this.getGroupMemberInfo((evt as any).group_id, (evt as any).user_id)
+            this.getGroupMemberInfo((evt as unknown as oicq.MemberIncreaseEventData).group_id, (evt as any).user_id)
             break
         case 'notice.group.decrease':
         {
             const gms = this.gml.get((evt as any).group_id)
             if (gms) {
-                gms.delete((evt as any).user_id)
+                gms.delete((evt as unknown as oicq.MemberDecreaseEventData).user_id)
             }
+            break
+        }
+        case 'sync.black':
+        {
+            this.blacklist = new Set((evt as unknown as oicq.SyncBlackEventData).blacklist)
+            break
+        }
+        case 'sync.profile':
+        {
+            this.nickname = (evt as oicq.SyncProfileEventData).nickname ?? this.nickname
+            this.sex = (evt as oicq.SyncProfileEventData).sex ?? this.sex
+            this.age = (evt as oicq.SyncProfileEventData).age ?? this.age
             break
         }
         }
@@ -286,6 +325,8 @@ export class BotProxy extends EventEmitter {
                 evt.reply = (message: any, autoEscape = false) => this.sendPrivateMsg((evt as any).user_id, message, autoEscape)
             }
         }
+        const listeners = this.listeners(evt.eventName)
+        logger.debug(listeners)
         this.emit(evt.eventName, evt)
     }
 
@@ -316,6 +357,7 @@ export class BotProxy extends EventEmitter {
         return await new Promise((resolve, reject) => {
             const msg = messages.makeMessage(type, value)
             this.awaitingPromises.set(msg.id, [resolve, reject])
+            logger.debug('BotProxy -> MessagePort', msg)
             this.port.postMessage(msg)
         })
     }
@@ -333,6 +375,7 @@ export class BotProxy extends EventEmitter {
             } else {
                 const msg = messages.makeMessage(type, value)
                 this.awaitingPromises.set(msg.id, [resolve, reject])
+                logger.debug('BotProxy -> ParentPort', msg)
                 parentPort.postMessage(msg)
             }
         })
@@ -341,6 +384,11 @@ export class BotProxy extends EventEmitter {
     /** 获取可用的插件列表 */
     getListPlugin () {
         return this.invokeParentPort('list-plugins') as Promise<PluginInfos>
+    }
+
+    /** 获取因出错而无法读取的插件错误输出 */
+    listPluginErrorOutputs () {
+        return this.invokeParentPort('list-plugin-error-outputs') as Promise<string[]>
     }
 
     /** 对机器人启用插件 */
@@ -468,7 +516,9 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
-     * 获取好友列表，调用时会同步一次好友列表
+     * 获取好友列表，调用时会同步一次好友列表，所以此处返回的是同步前的好友列表
+     *
+     * 此方法在 oicq 是弃用的，但是 NeonBot 出于跨线程异步化的想法依然保留此方法，其行为和直接访问 this.fl 一致
      */
     getFriendList () {
         this.getFriendListAsync()
@@ -488,7 +538,7 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
-     * 获取陌生人列表，调用时会同步一次陌生人列表
+     * 获取陌生人列表，调用时会同步一次陌生人列表，所以此处返回的是同步前的陌生人列表
      */
     getStrangerList () {
         this.getStrangerListAsync()
@@ -508,7 +558,7 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
-     * 获取群列表，调用时会同步一次群组列表
+     * 获取群列表，调用时会同步一次群组列表，所以此处返回的是同步前的群组列表
      */
     getGroupList () {
         this.getGroupListAsync()
@@ -1059,7 +1109,7 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
-     * 获取群公告
+     * @deprecated 获取群公告(该方法已废弃，参考web-api.md自行获取)
      */
     getGroupNotice (groupId: number) {
         return this.invoke('node-oicq-invoke', {
@@ -1158,7 +1208,7 @@ export class BotProxy extends EventEmitter {
     }
 
     /**
-     * 获取等级信息(默认获取自己的)
+     * @deprecated 获取等级信息(该方法已废弃，参考web-api.md自行获取)
      */
     getLevelInfo (userId?: number) {
         return this.invoke('node-oicq-invoke', {
@@ -1240,6 +1290,42 @@ export class BotProxy extends EventEmitter {
             qqId: this.qqid,
             methodName: 'getVersionInfo'
         }) as Promise<oicq.Ret<typeof import('oicq/package.json')>>
+    }
+
+    /** 置消息已读(message_id及之前的消息将全部变为已读) */
+    reportReaded (messageId: string) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'reportReaded',
+            arguments: [messageId]
+        }) as Promise<oicq.Ret>
+    }
+
+    /** 发送一个未加密的uni包 */
+    sendUni (cmd: string, body: Uint8Array) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendUni',
+            arguments: [cmd, body]
+        }) as Promise<Buffer>
+    }
+
+    /** 发送一个未加密的oidb包 */
+    sendOidb (cmd: string, body: Uint8Array) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'sendOidb',
+            arguments: [cmd, body]
+        }) as Promise<Buffer>
+    }
+
+    /** 触发一个oicq标准事件 */
+    em (name: string, data?: object) {
+        return this.invoke('node-oicq-invoke', {
+            qqId: this.qqid,
+            methodName: 'em',
+            arguments: [name, data]
+        }) as Promise<void>
     }
 
     /**

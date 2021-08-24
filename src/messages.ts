@@ -9,6 +9,7 @@ import { CommonEventData, ConfBot, FriendInfo, Gender, GroupInfo, MemberInfo, Me
 import { randonID } from './utils'
 import { InitConfig } from './plugin'
 import { MessagePort } from 'worker_threads'
+import { WorkerStatus } from './worker'
 
 /** 消息类型命名空间 */
 export namespace messages {
@@ -17,6 +18,8 @@ export namespace messages {
         'deploy-worker' |
         'worker-ready' |
         'list-plugins' |
+        'list-plugin-error-outputs' |
+        'get-workers-status' |
         'enable-plugin' |
         'connect-plugin' |
         'disable-plugin' |
@@ -27,6 +30,8 @@ export namespace messages {
         'node-oicq-invoke' |
         'node-oicq-gfs-aquire' |
         'node-oicq-gfs-invoke' |
+        'save-config' |
+        'stop-bot' |
         'get-save-data'
 
     export enum WorkerType {
@@ -102,7 +107,7 @@ export namespace messages {
 
     export type OICQMessage = MessageElem | Iterable<MessageElem> | string
 
-    export interface NodeOICQEventMessage<T = CommonEventData> extends BaseMessage {
+    export interface NodeOICQEventMessage<T extends CommonEventData = CommonEventData> extends BaseMessage {
         type: 'node-oicq-event'
         value: (T extends CommonEventData ? T : CommonEventData) & {
             eventName: string
@@ -158,6 +163,16 @@ export namespace messages {
             qqId?: number
             port: MessagePort
             pluginId?: string
+            pluginData: any
+        }
+    }
+
+    export interface SaveConfigMessage extends BaseMessage {
+        type: 'save-config'
+        value: {
+            pluginId: string
+            qqId?: number
+            pluginData: any
         }
     }
 
@@ -172,6 +187,27 @@ export namespace messages {
 
     export interface ListPluginMessage extends BaseMessage {
         type: 'list-plugins'
+    }
+
+    export interface ListPluginErrorOutputsMessage extends BaseMessage {
+        type: 'list-plugin-error-outputs'
+    }
+
+    export interface GetWorkersStatusMessage extends BaseMessage {
+        type: 'get-workers-status'
+    }
+
+    export interface GetWorkersStatusResult extends BaseResult {
+        type: 'get-workers-status',
+        value: {
+            corePluginWorkers: { [pluginId: string]: WorkerStatus }
+            pluginWorkers: { [pluginId: string]: WorkerStatus }
+            botWorkers: { [qqId: number]: WorkerStatus }
+        }
+    }
+
+    export interface StopBotMessage extends BaseMessage {
+        type: 'stop-bot'
     }
 
     export interface GetSaveDataMessage extends BaseMessage {

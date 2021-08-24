@@ -1,15 +1,18 @@
-import { isMainThread, parentPort, workerData } from 'worker_threads'
+import { isMainThread, parentPort, threadId, workerData } from 'worker_threads'
 import * as log4js from 'log4js'
-import { ConfBot } from 'oicq'
+import { ConfBot, constants } from 'oicq'
 import { resolve } from 'path'
 import { setupConsole } from './console'
 import corePlugins from './core-plugins'
 import { createBotWorker, createCorePluginWorker, NeonWorker, onWorkerMessage } from './worker'
 import { enablePlugin, listPlugins } from './plugin'
-import { loadConfig } from './config'
+import { clearConfigLock, loadConfig } from './config'
+
+export type { NeonPlugin, InitConfig } from './plugin'
+export type { BotProxy, BotProxyError } from './botproxy'
 
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
-logger.level = 'info'
+logger.level = workerData?.loggerLevel || 'info'
 
 export interface AccountConfig {
     /**
@@ -35,6 +38,10 @@ export interface NeonBotConfig {
      */
     pluginDataFile?: string
     /**
+     * 日志输出的等级，将会通用至所有线程，机器人线程中的日志输出等级将会优先于此配置，默认为 `info`
+     */
+    loggerLevel?: string
+    /**
      * 最高管理员的 QQ 号码，只有在此列表的用户可以与核心插件交互
      */
     admins: number[]
@@ -54,19 +61,19 @@ export interface NeonBotConfig {
 export enum Platform {
     /** 安卓手机设备（默认） */
     // eslint-disable-next-line no-unused-vars
-    AndroidPhone = 1,
+    AndroidPhone = constants.PLATFORM_ANDROID,
     /** 安卓平板设备 */
     // eslint-disable-next-line no-unused-vars
-    AndroidTablet = 2,
+    AndroidTablet = constants.PLATFORM_APAD,
     /** 安卓手表设备 */
     // eslint-disable-next-line no-unused-vars
-    AndroidWatch = 3,
+    AndroidWatch = constants.PLATFORM_WATCH,
     /** 苹果电脑系统 */
     // eslint-disable-next-line no-unused-vars
-    MacOS = 4,
+    MacOS = constants.PLATFORM_IMAC,
     /** 苹果平板设备 */
     // eslint-disable-next-line no-unused-vars
-    IPad = 5
+    IPad = constants.PLATFORM_IPAD
 }
 
 export const pluginWorkers = new Map<string, NeonWorker>()
@@ -76,6 +83,7 @@ export const indexPath = __filename
 export let config: NeonBotConfig
 
 async function main () {
+    logger.info('线程 ID', threadId)
     if (isMainThread) {
         logger.info('NeonBot - by SteveXMH')
         if (process.argv.length < 3) {
@@ -88,6 +96,9 @@ async function main () {
             } catch (err) {
                 logger.fatal('无法加载配置文件，请检查配置文件是否正确：', err)
                 process.exit(1)
+            }
+            if (config.loggerLevel) {
+                logger.level = config.loggerLevel
             }
             setupConsole()
             config.admins = config.admins || []
@@ -106,6 +117,7 @@ async function main () {
             }
             config.dataDir = config.dataDir || resolve(configPath, '../data')
             logger.info('机器人数据文件夹：', config.dataDir)
+            clearConfigLock()
             // Launch bots
             logger.info('正在启动机器人线程')
             for (const qqid in config.accounts) {
@@ -135,6 +147,8 @@ async function main () {
                     }
                 }
             }
+            logger.info('初始化完成！输入 help 以查看命令行帮助')
+            logger.info('你也可以通过管理员账户发送 .help 查看聊天管理帮助')
         }
     } else {
         parentPort!!.on('message', onWorkerMessage)

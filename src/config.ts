@@ -3,7 +3,7 @@
  * 用于读写插件配置文件的东西
  */
 
-import { constants } from 'fs'
+import { constants, existsSync, unlinkSync } from 'fs'
 import { access, readFile, writeFile } from 'fs/promises'
 import { lock, unlock } from 'lockfile'
 import { config as neonbotConfig } from '.'
@@ -23,10 +23,17 @@ export interface PluginConfig {
 
 let config: PluginConfig = {}
 
+export function clearConfigLock () {
+    const lockFile = neonbotConfig.pluginSearchPath + '.lock'
+    if (existsSync(lockFile)) unlinkSync(lockFile)
+}
+
 export function saveConfig () {
     return new Promise<void>((resolve, reject) => {
         const lockFile = neonbotConfig.pluginSearchPath + '.lock'
-        lock(lockFile, async (err) => {
+        lock(lockFile, {
+            wait: Number.MAX_SAFE_INTEGER
+        }, async (err) => {
             if (err) {
                 reject(err)
             } else {
@@ -57,7 +64,9 @@ export function saveConfig () {
 export function loadConfig () {
     return new Promise<PluginConfig>((resolve, reject) => {
         const lockFile = neonbotConfig.pluginSearchPath + '.lock'
-        lock(lockFile, async (err) => {
+        lock(lockFile, {
+            wait: Number.MAX_SAFE_INTEGER
+        }, async (err) => {
             if (err) {
                 reject(err)
             } else {
