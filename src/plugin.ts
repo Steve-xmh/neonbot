@@ -29,7 +29,7 @@ export interface InitConfig<D = any> {
 /**
  * 一个插件对象，包含了与 NeonBot 交互的各个接口
  */
-export default interface NeonPlugin {
+export interface NeonPlugin {
     /**
      * 插件的名称
      */

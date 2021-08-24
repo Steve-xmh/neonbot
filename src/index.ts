@@ -8,6 +8,9 @@ import { createBotWorker, createCorePluginWorker, NeonWorker, onWorkerMessage } 
 import { enablePlugin, listPlugins } from './plugin'
 import { clearConfigLock, loadConfig } from './config'
 
+export type { NeonPlugin, InitConfig } from './plugin'
+export type { BotProxy, BotProxyError } from './botproxy'
+
 export const logger = log4js.getLogger(workerData?.logger || '[NeonBot]')
 logger.level = workerData?.loggerLevel || 'info'
 

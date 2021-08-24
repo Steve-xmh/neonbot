@@ -220,10 +220,11 @@ export class BotProxy extends EventEmitter {
         super()
         logger.debug('创建了新机器人代理对象', qqid, port)
         this.uin = qqid
-        process.once('uncaughtException', () => {
-            this.close() // 出错时关闭通讯接口
+        this.port.once('messageerror', (err) => {
+            logger.warn('警告：通信接口发生错误', err)
         })
         this.port.once('close', () => {
+            logger.debug('警告：通信接口已关闭')
             this.channelClosed = true
         })
         const messageCallback = (data: messages.BaseMessage) => {

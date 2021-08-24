@@ -5,7 +5,7 @@ import { acceptableEvents, BotProxy } from './botproxy'
 import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
-import NeonPlugin, { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin } from './plugin'
+import { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin, NeonPlugin } from './plugin'
 import { randonID } from './utils'
 
 export interface WorkerStatus {
@@ -446,11 +446,8 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             logger.warn('通信接口类型不正确')
             break
         }
+        logger.debug('连接到通信接口', port)
         const pluginMessage = (message as messages.SetPluginMessage).value
-        if (!(port && port instanceof MessagePort)) {
-            logger.warn('通信接口类型不正确')
-            break
-        }
         const qqid = pluginMessage.qqId
         if (qqid) {
             if (!botProxies.has(qqid)) {

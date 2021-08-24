@@ -3,7 +3,7 @@
  * 核心插件 - 管理员指令，可以在机器人会话中操作插件等其他东西
  */
 
-import NeonPlugin, { InitConfig } from '../plugin'
+import { InitConfig, NeonPlugin } from '../plugin'
 import * as oicq from 'oicq'
 import { BotProxy } from '../botproxy'
 import * as os from 'os'
@@ -61,8 +61,14 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
             {
                 if (args.length === 1) {
                     // List plugins
-                    const plugins = await this.getListPlugin()
+                    const [warns, plugins] = await Promise.all([
+                        this.listPluginErrorOutputs(),
+                        this.getListPlugin()
+                    ])
                     const msgs = Object.keys(plugins).map(pluginId => `${plugins[pluginId].id} - ${plugins[pluginId].name || plugins[pluginId].shortName}`)
+                    if (warns.length > 0) {
+                        msgs.push(`警告：搜索插件的过程中发现 ${warns.length} 处错误，请执行 .plugins warns 查看错误列表`)
+                    }
                     await evt.reply('目前已搜索到的插件：\n' + msgs.join('\n'))
                 } else if (args.length === 2) {
                     switch (args[1]) {

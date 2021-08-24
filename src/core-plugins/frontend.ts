@@ -4,7 +4,7 @@
  */
 
 import { logger } from '..'
-import NeonPlugin, { InitConfig } from '../plugin'
+import { InitConfig, NeonPlugin } from '../plugin'
 
 let config: InitConfig<{
     disabled?: boolean,
