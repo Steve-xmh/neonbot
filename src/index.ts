@@ -1,6 +1,6 @@
 import { isMainThread, parentPort, threadId, workerData } from 'worker_threads'
 import * as log4js from 'log4js'
-import { ConfBot, constants } from 'oicq'
+import { Config, Platform } from 'oicq'
 import { resolve } from 'path'
 import { setupConsole } from './console'
 import corePlugins from './core-plugins'
@@ -8,6 +8,8 @@ import { createBotWorker, createCorePluginWorker, NeonWorker, onWorkerMessage } 
 import { enablePlugin, listPlugins } from './plugin'
 import { clearConfigLock, loadConfig } from './config'
 
+/** 原 OICQ 库 */
+export * as oicq from 'oicq'
 export type { NeonPlugin, InitConfig } from './plugin'
 export type { BotProxy, BotProxyError } from './botproxy'
 
@@ -48,32 +50,11 @@ export interface NeonBotConfig {
     /**
      * 需要作为机器人的 QQ 账户配置，键值为 QQ 号码
      */
-    accounts: { [qqid: number]: AccountConfig & ConfBot }
+    accounts: { [qqid: number]: AccountConfig & Config }
     /**
      * 数据存储文件夹，如果为空则为配置文件同文件夹中的 data 文件夹
      */
     dataDir?: string
-}
-
-/**
- * 需要让机器人模拟运行的设备环境，不同环境可能会导致部分事件或功能无法触发或使用，默认为 `Platform.AndroidPhone`
- */
-export enum Platform {
-    /** 安卓手机设备（默认） */
-    // eslint-disable-next-line no-unused-vars
-    AndroidPhone = constants.PLATFORM_ANDROID,
-    /** 安卓平板设备 */
-    // eslint-disable-next-line no-unused-vars
-    AndroidTablet = constants.PLATFORM_APAD,
-    /** 安卓手表设备 */
-    // eslint-disable-next-line no-unused-vars
-    AndroidWatch = constants.PLATFORM_WATCH,
-    /** 苹果电脑系统 */
-    // eslint-disable-next-line no-unused-vars
-    MacOS = constants.PLATFORM_IMAC,
-    /** 苹果平板设备 */
-    // eslint-disable-next-line no-unused-vars
-    IPad = constants.PLATFORM_IPAD
 }
 
 export const pluginWorkers = new Map<string, NeonWorker>()

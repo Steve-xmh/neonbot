@@ -40,3 +40,25 @@ export function getDuration (t: Date) {
     }
     return result
 }
+
+export function purifyObject (data: any) {
+    switch (typeof data) {
+    case 'object': {
+        for (const key in data) {
+            switch (typeof data[key]) {
+            case 'object': purifyObject(data[key])
+                break
+            case 'function':
+                delete data[key]
+                break
+            default:
+            }
+        }
+        break
+    } case 'function': {
+        return undefined
+    }
+    default:
+    }
+    return data
+}

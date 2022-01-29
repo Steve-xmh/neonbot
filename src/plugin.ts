@@ -187,6 +187,13 @@ export async function enablePlugin (qqId: number, pluginId: string) {
 }
 
 /**
+ * 对某一机器人线程所连接的所有插件重新连接通信端口
+ * 通常用在机器人线程崩溃的时候
+ */
+export async function reconnectPlugins (qqId: number) {
+}
+
+/**
  * 对 QQ 账户禁用插件并写入配置文件
  * @param qqId QQ 账户
  * @param pluginId 插件 ID

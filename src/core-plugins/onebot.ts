@@ -12,9 +12,9 @@ let config: InitConfig<{
 }>
 
 const plugin: NeonPlugin = {
-    name: '前端管理插件',
-    id: 'net.stevexmh.neonbot.frontend',
-    shortName: 'frontend',
+    name: 'OneBot 协议插件',
+    id: 'net.stevexmh.neonbot.onebot',
+    shortName: 'OB',
     async init (initConfig) {
         config = initConfig
         config.pluginData = config.pluginData || {}

@@ -4,9 +4,9 @@
  */
 
 import admin from './admin'
-import frontend from './frontend'
+import onebot from './onebot'
 
 export default [
     admin,
-    frontend
+    onebot
 ]

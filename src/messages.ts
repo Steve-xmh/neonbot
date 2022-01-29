@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto'
 import { AccountConfig } from '.'
-import { CommonEventData, ConfBot, FriendInfo, Gender, GroupInfo, MemberInfo, MessageElem, Ret, Statistics, StrangerInfo } from 'oicq'
+import { Client, Config, EventMap, FriendInfo, Gender, GroupInfo, MemberInfo, Message, MessageElem, Statistics, StrangerInfo } from 'oicq'
 import { randonID } from './utils'
 import { InitConfig } from './plugin'
 import { MessagePort } from 'worker_threads'
@@ -78,7 +78,7 @@ export namespace messages {
     export interface DeployBotWorkerData extends DeployWorkerData {
         workerType: WorkerType.Bot
         qqid: number
-        config: AccountConfig & ConfBot
+        config: AccountConfig & Config
     }
 
     export interface DeployPluginWorkerData extends DeployWorkerData {
@@ -107,21 +107,20 @@ export namespace messages {
 
     export type OICQMessage = MessageElem | Iterable<MessageElem> | string
 
-    export interface NodeOICQEventMessage<T extends CommonEventData = CommonEventData> extends BaseMessage {
+    export interface NodeOICQEventMessage<T extends Message = Message> extends BaseMessage {
         type: 'node-oicq-event'
-        value: (T extends CommonEventData ? T : CommonEventData) & {
-            eventName: string
-            // eslint-disable-next-line camelcase
-            reply?: (message: OICQMessage, autoEscape?: boolean) => Promise<Ret<{ message_id: string }>>
-        }
+        eventName: keyof EventMap,
+        value: T extends Message ? T : Message
     }
 
-    export interface NodeOICQInvokeMessage extends BaseMessage {
+    export type ReturnTypeOfClientMethod<M extends keyof Client> = Client[M] extends (...args: any) => infer R ? (R extends Promise<infer PR> ? PR : R) : never
+
+    export interface NodeOICQInvokeMessage<M extends keyof Client> extends BaseMessage {
         type: 'node-oicq-invoke'
         value: {
             qqId: number
-            methodName: string
-            arguments: any[]
+            methodName: M
+            arguments: Client[M] extends (...args: any) => any ? Parameters<Client[M]> : never
         }
     }
 
@@ -136,8 +135,7 @@ export namespace messages {
             readonly sex: Gender;
             readonly age: number;
             /** 在线状态 */
-            // eslint-disable-next-line camelcase
-            readonly online_status: number;
+            readonly status: number;
             /** 是否在线 */
             readonly online: boolean;
             /** 好友列表 */
@@ -151,7 +149,7 @@ export namespace messages {
             /** 当前账号本地存储路径 */
             readonly dir: string;
             /** 配置信息(大部分参数支持热修改) */
-            readonly config: ConfBot;
+            readonly config: Config;
             /** 数据统计信息 */
             readonly stat: Statistics;
         }

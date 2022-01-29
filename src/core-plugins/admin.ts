@@ -46,8 +46,8 @@ function getCPUUsage (): Promise<number> {
     })
 }
 
-async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventData) {
-    if (config.admins.includes(evt.user_id)) {
+async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEvent) {
+    if (config.admins.includes(evt.from_id)) {
         if (evt.raw_message.startsWith('.')) {
             const args = evt.raw_message.match(/"[^"]*"|[^\s"]+/g)!!.map(v => {
                 if (v.startsWith('"') && v.endsWith('"')) {
@@ -69,24 +69,24 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                     if (warns.length > 0) {
                         msgs.push(`警告：搜索插件的过程中发现 ${warns.length} 处错误，请执行 .plugins warns 查看错误列表`)
                     }
-                    await evt.reply('目前已搜索到的插件：\n' + msgs.join('\n'))
+                    await this.sendPrivateMsg(evt.from_id, '目前已搜索到的插件：\n' + msgs.join('\n'))
                 } else if (args.length === 2) {
                     switch (args[1]) {
                     case 'warns':
                     {
                         const warns = await this.listPluginErrorOutputs()
                         if (warns.length > 0) {
-                            await evt.reply([
+                            await this.sendPrivateMsg(evt.from_id, [
                                 '插件读取错误清单',
                                 ...warns
                             ].join('\n'))
                         } else {
-                            await evt.reply('没有任何插件读取错误')
+                            await this.sendPrivateMsg(evt.from_id, '没有任何插件读取错误')
                         }
                         break
                     }
                     default:
-                        await evt.reply([
+                        await this.sendPrivateMsg(evt.from_id, [
                             '未知的子指令：' + args[1],
                             ...pluginsCmdHelp
                         ].join('\n'))
@@ -98,9 +98,9 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         const plugins = await this.getListPlugin()
                         if (args[2] in plugins) {
                             await this.enablePlugin(args[2])
-                            await evt.reply('成功对本机器人启用了插件 ' + args[2])
+                            await this.sendPrivateMsg(evt.from_id, '成功对本机器人启用了插件 ' + args[2])
                         } else {
-                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                            await this.sendPrivateMsg(evt.from_id, '错误：找不到 ID 为 ' + args[2] + ' 的插件')
                         }
                         break
                     }
@@ -109,9 +109,9 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         const plugins = await this.getListPlugin()
                         if (args[2] in plugins) {
                             await this.disablePlugin(args[2])
-                            await evt.reply('成功对本机器人禁用了插件 ' + args[2])
+                            await this.sendPrivateMsg(evt.from_id, '成功对本机器人禁用了插件 ' + args[2])
                         } else {
-                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                            await this.sendPrivateMsg(evt.from_id, '错误：找不到 ID 为 ' + args[2] + ' 的插件')
                         }
                         break
                     }
@@ -120,9 +120,9 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         const plugins = await this.getListPlugin()
                         if (args[2] in plugins) {
                             await this.reloadPlugin(args[2])
-                            await evt.reply('成功重启了插件 ' + args[2])
+                            await this.sendPrivateMsg(evt.from_id, '成功重启了插件 ' + args[2])
                         } else {
-                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                            await this.sendPrivateMsg(evt.from_id, '错误：找不到 ID 为 ' + args[2] + ' 的插件')
                         }
                         break
                     }
@@ -131,20 +131,20 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                         const plugins = await this.getListPlugin()
                         if (args[2] in plugins) {
                             await this.reloadPlugin(args[2])
-                            await evt.reply('成功重启了插件 ' + args[2])
+                            await this.sendPrivateMsg(evt.from_id, '成功重启了插件 ' + args[2])
                         } else {
-                            await evt.reply('错误：找不到 ID 为 ' + args[2] + ' 的插件')
+                            await this.sendPrivateMsg(evt.from_id, '错误：找不到 ID 为 ' + args[2] + ' 的插件')
                         }
                         break
                     }
                     default:
-                        await evt.reply([
+                        await this.sendPrivateMsg(evt.from_id, [
                             '未知的子指令：' + args[1],
                             ...pluginsCmdHelp
                         ].join('\n'))
                     }
                 } else {
-                    await evt.reply(pluginsCmdHelp.join('\n'))
+                    await this.sendPrivateMsg(evt.from_id, pluginsCmdHelp.join('\n'))
                 }
                 break
             }
@@ -166,12 +166,12 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
                 const rss = process.memoryUsage.rss()
                 reply += '\n' + 'NeonBot 内存占用：' + formatBinarySize(rss) + '/' + formatBinarySize(totalMem) + ' (' + (rss / totalMem * 100).toFixed(2) + '%)'
                 reply += '\n' + '系统内存占用：' + formatBinarySize(usedMem) + '/' + formatBinarySize(totalMem) + ' (' + (usedMem / totalMem * 100).toFixed(2) + '%)'
-                evt.reply(reply)
+                this.sendPrivateMsg(evt.from_id, reply)
                 break
             }
             case '.help':
             {
-                await evt.reply([
+                await this.sendPrivateMsg(evt.from_id, [
                     '--- NeonBot 使用帮助 ---',
                     '.plugins - 列出所有可用插件',
                     '.plugins warns - 列出在插件文件夹内但是无法正确识别的插件',
@@ -186,7 +186,7 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
             }
             default:
             {
-                await evt.reply('未知的指令：' + args[0])
+                await this.sendPrivateMsg(evt.from_id, '未知的指令：' + args[0])
             }
             }
         }
@@ -195,11 +195,11 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEventDa
 
 let offlineTime: Date
 
-async function onOffline (this: BotProxy, evt: oicq.OfflineEventData) {
+async function onOffline (this: BotProxy) {
     offlineTime = new Date()
 }
 
-async function onOnline (this: BotProxy, evt: oicq.OnlineEventData) {
+async function onOnline (this: BotProxy) {
     for (const admin of config.admins) {
         if (offlineTime) {
             await this.sendPrivateMsg(admin, `NeonBot 在 ${getDuration(offlineTime)} (${offlineTime.toLocaleString('zh-cn')}) 断开连接，现已重新上线`)

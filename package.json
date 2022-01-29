@@ -1,6 +1,6 @@
 {
   "name": "neonbot",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "main": "dist/index.js",
   "repository": "git@github.com:Steve-xmh/neonbot.git",
   "author": "SteveXMH <stevexmh@qq.com>",
@@ -16,7 +16,7 @@
   "dependencies": {
     "lockfile": "^1.0.4",
     "nanoid": "^3.1.23",
-    "oicq": "^1.19",
+    "oicq": "^2.1.9",
     "typescript": "^4.3.2"
   },
   "devDependencies": {

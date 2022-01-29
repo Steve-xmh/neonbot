@@ -86,7 +86,7 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'stat',
             arguments: [fid]
-        }) as Promise<oicq.GfsStat>
+        }) as ReturnType<oicq.Gfs['stat']>
     }
 
     /** 列出文件，start从0开始，limit默认100(最大) */
@@ -94,7 +94,7 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'ls',
             arguments: [fid, start, limit]
-        }) as Promise<oicq.GfsStat>
+        }) as ReturnType<oicq.Gfs['ls']>
     }
 
     /** ls的别名，列出文件，start从0开始，limit默认100(最大) */
@@ -107,7 +107,7 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'mkdir',
             arguments: [name]
-        }) as Promise<oicq.GfsDirStat>
+        }) as ReturnType<oicq.Gfs['mkdir']>
     }
 
     /** 删除文件或目录(删除目标是目录的时候会删除下面的所有文件) */
@@ -115,7 +115,7 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'rm',
             arguments: [fid]
-        }) as Promise<void>
+        }) as ReturnType<oicq.Gfs['rm']>
     }
 
     /** 重命名文件或目录 */
@@ -123,7 +123,7 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'rename',
             arguments: [fid, name]
-        }) as Promise<void>
+        }) as ReturnType<oicq.Gfs['rename']>
     }
 
     /** 移动文件到其他目录 */
@@ -131,7 +131,7 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'mv',
             arguments: [fid, pid]
-        }) as Promise<void>
+        }) as ReturnType<oicq.Gfs['mv']>
     }
 
     /** 查看可用空间和文件数量 */
@@ -139,29 +139,31 @@ export class GFSProxy extends EventEmitter {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'df',
             arguments: []
-        }) as Promise<{
-            total: number,
-            used: number,
-            free: number,
-            // eslint-disable-next-line camelcase
-            file_count: number,
-            // eslint-disable-next-line camelcase
-            max_file_count: number,
-        }>
+        }) as ReturnType<oicq.Gfs['df']>
     }
 
-    upload (pathOrBuffer: string | Buffer | Uint8Array, pid?: string, name?: string) {
+    /**
+     * 上传文件，可以是文件路径或者 Buffer 数据
+     *
+     * 注：NeonBot 暂不支持上传进度回调（TODO）
+     * @param pathOrBuffer 需要上传的文件路径或者 Buffer 数据
+     * @param pid 需要上传到的文件夹 ID
+     * @param name 文件名称
+     * @param callback 上传进度回调（暂不会调用）
+     * @returns 上传成功后的文件信息
+     */
+    upload (pathOrBuffer: string | Buffer | Uint8Array, pid?: string, name?: string, callback?: (percentage: string) => void) {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'upload',
             arguments: [pathOrBuffer, pid, name]
-        }) as Promise<oicq.GfsFileStat>
+        }) as ReturnType<oicq.Gfs['upload']>
     }
 
     download (fid: string) {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'download',
             arguments: [fid]
-        }) as Promise<oicq.FileElem['data']>
+        }) as ReturnType<oicq.Gfs['download']>
     }
 
     /**

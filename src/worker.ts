@@ -1,4 +1,4 @@
-import { Client, createClient, Gfs } from 'oicq'
+import { Client, createClient, Gfs, PrivateMessage } from 'oicq'
 import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { acceptableEvents, BotProxy } from './botproxy'
@@ -6,7 +6,7 @@ import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
 import { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin, NeonPlugin } from './plugin'
-import { randonID } from './utils'
+import { purifyObject, randonID } from './utils'
 
 export interface WorkerStatus {
     usedMemory: number
@@ -14,6 +14,7 @@ export interface WorkerStatus {
 
 export class NeonWorker extends Worker {
     public ready: boolean = false
+    private lastBeat: number = Date.now()
     private waitReadyPromises: [Function, Function][] = []
 
     constructor (stringUrl: string | URL, options?: WorkerOptions) {
@@ -199,7 +200,7 @@ export function createCorePluginWorker (plugin: NeonPlugin) {
     pluginWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-invoke') {
             invokeIds.set(data.id, plugin.id)
-            const invokeData = (data as messages.NodeOICQInvokeMessage).value
+            const invokeData = (data as messages.NodeOICQInvokeMessage<any>).value
             const bot = botWorkers.get(invokeData.qqId)
             if (bot) {
                 bot.postMessage(data)
@@ -272,7 +273,7 @@ export async function createPluginWorker (pluginPath: string, pluginId: string, 
     pluginWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-invoke') {
             invokeIds.set(data.id, pluginId)
-            const invokeData = (data as messages.NodeOICQInvokeMessage).value
+            const invokeData = (data as messages.NodeOICQInvokeMessage<any>).value
             const bot = botWorkers.get(invokeData.qqId)
             if (bot) {
                 bot.postMessage(data)
@@ -322,7 +323,7 @@ export function createBotWorker (qqId: number) {
     })
     botWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-event') {
-            const evt = (data as messages.NodeOICQEventMessage).value
+            const evt = (data as messages.NodeOICQEventMessage<PrivateMessage>).value
             if (evt.post_type === 'message' && evt.message_type === 'private') {
                 if (config.admins.includes(data.value.user_id)) {
                     for (const [, plugin] of corePluginWorkers) {
@@ -390,15 +391,12 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 }
             })
             for (const eventName of acceptableEvents) {
-                bot.on(eventName, (data) => {
-                    data.eventName = eventName
-                    if ('reply' in data) {
-                        delete data.reply
-                    }
+                bot.on(eventName, (data: any) => {
                     const postData: messages.NodeOICQEventMessage = {
                         id: randonID(),
+                        eventName: eventName as any,
                         type: 'node-oicq-event',
-                        value: data
+                        value: purifyObject(data)
                     }
                     for (const port of pluginPorts) {
                         port.postMessage(postData)
@@ -461,7 +459,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
     case 'verify-message':
     {
         if (bot) {
-            bot.sliderLogin(message.value.token)
+            bot.submitSlider(message.value.token)
         } else {
             logger.warn('机器人尚未初始化，无法验证！')
         }
@@ -496,7 +494,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
         port.on('message', async (message: messages.BaseMessage) => {
             logger.debug('<- Plugin', message)
             if (message.type === 'node-oicq-invoke') {
-                const data = message as messages.NodeOICQInvokeMessage
+                const data = message as messages.NodeOICQInvokeMessage<any>
                 const invokeData = data.value
                 if (typeof (bot as any)[invokeData.methodName] === 'function') {
                     try {
@@ -599,7 +597,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 nickname: bot?.nickname,
                 online: bot?.isOnline(),
                 sex: bot?.sex,
-                online_status: bot?.online_status,
+                status: bot.status,
                 fl: bot?.fl,
                 sl: bot?.sl,
                 gl: bot?.gl,
