@@ -3,7 +3,9 @@
  * 常用的东西
  */
 
+import { X509Certificate } from 'crypto'
 import { nanoid } from 'nanoid'
+import { TransferListItem, MessagePort } from 'worker_threads'
 
 export const randonID = nanoid
 
@@ -41,24 +43,96 @@ export function getDuration (t: Date) {
     return result
 }
 
+/** 将所给数据进行复原，主要是将 ArrayBuffer 转换成原有形式 */
+export function restoreObject<T = any> (data: T): T {
+    if (data instanceof ArrayBuffer) {
+        return Buffer.from(data) as any
+    }
+    switch (typeof data) {
+    case 'object':
+    {
+        for (const key in data) {
+            if (data[key] instanceof ArrayBuffer) {
+                data[key] = Buffer.from(data[key] as any) as any
+            } else if (typeof data[key] === 'object') {
+                data[key] = restoreObject(data[key])
+            }
+        }
+        break
+    }
+    default:
+    }
+    return data
+}
+
 export function purifyObject (data: any) {
+    const transferList: TransferListItem[] = []
     switch (typeof data) {
     case 'object': {
         for (const key in data) {
+            if (data[key] instanceof Buffer ||
+                        data[key] instanceof ArrayBuffer ||
+                        data[key] instanceof Uint8Array ||
+                        data[key] instanceof Uint16Array ||
+                        data[key] instanceof Uint32Array ||
+                        data[key] instanceof Int8Array ||
+                        data[key] instanceof Int16Array ||
+                        data[key] instanceof Int32Array ||
+                        data[key] instanceof MessagePort ||
+                        data[key] instanceof X509Certificate) {
+                if (
+                    data[key] instanceof Uint8Array ||
+                    data[key] instanceof Uint16Array ||
+                    data[key] instanceof Uint32Array ||
+                    data[key] instanceof Int8Array ||
+                    data[key] instanceof Int16Array ||
+                    data[key] instanceof Int32Array
+                ) { // 将参数中的 Uint8Array 转换成 Buffer
+                    data[key] = data[key].buffer
+                }
+                continue
+            }
             switch (typeof data[key]) {
-            case 'object': purifyObject(data[key])
-                break
             case 'function':
                 delete data[key]
+                break
+            case 'object': transferList.push(...purifyObject(data[key]).transferList)
                 break
             default:
             }
         }
         break
     } case 'function': {
-        return undefined
+        return {
+            data: undefined,
+            transferList
+        }
     }
     default:
+    {
+        if (data instanceof Buffer ||
+                    data instanceof ArrayBuffer ||
+                    data instanceof Uint8Array ||
+                    data instanceof Uint16Array ||
+                    data instanceof Uint32Array ||
+                    data instanceof Int8Array ||
+                    data instanceof Int16Array ||
+                    data instanceof Int32Array ||
+                    data instanceof MessagePort ||
+                    data instanceof X509Certificate) {
+            if (
+                data instanceof Uint8Array ||
+                data instanceof Uint16Array ||
+                data instanceof Uint32Array ||
+                data instanceof Int8Array ||
+                data instanceof Int16Array ||
+                data instanceof Int32Array
+            ) { // 将参数中的 Uint8Array 转换成 ArrayBuffer
+                data = data.buffer
+            }
+            return { data, transferList: [data] }
+        }
     }
-    return data
+    }
+    return { data, transferList }
 }

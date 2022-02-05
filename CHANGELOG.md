@@ -5,6 +5,9 @@
 ## 开发分支
 
 - **重要**：更新 oicq 版本到 v2，需要大量改写代码以兼容新版的各项操作。
+- 应该修复了插件崩溃时重启导致的信号未连接的问题
+- 增加了独立的 `BotProxy.loadLocalData` `BotProxy.saveLocalData` `BotProxy.loadGlobalData` `BotProxy.saveGlobalData` 以便在一些情况下读写存储的数据
+- 修正了跨线程传递 Buffer 和 TypedArray 的问题（任何继承 Uint8Array 的类在经过跨线程传输之后都会变成 Buffer）
 
 ## 0.0.3
 

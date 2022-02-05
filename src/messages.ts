@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'crypto'
-import { AccountConfig } from '.'
+import { AccountConfig, BotProxy } from '.'
 import { Client, Config, EventMap, FriendInfo, Gender, GroupInfo, MemberInfo, Message, MessageElem, Statistics, StrangerInfo } from 'oicq'
 import { randonID } from './utils'
 import { InitConfig } from './plugin'
@@ -32,7 +32,8 @@ export namespace messages {
         'node-oicq-gfs-invoke' |
         'save-config' |
         'stop-bot' |
-        'get-save-data'
+        'get-save-data' |
+        'set-save-data'
 
     export enum WorkerType {
         // eslint-disable-next-line no-unused-vars
@@ -113,6 +114,22 @@ export namespace messages {
         value: T extends Message ? T : Message
     }
 
+    // 类型体操，用来检测 BotProxy 是否完全实现了 oicq 的 api 们
+    type OicqClientFunctions = {
+        [M in keyof Client]: Client[M] extends (...args: any) => any ? M : never
+    }
+    type BotProxyFunctions = {
+        [M in keyof BotProxy]: BotProxy[M] extends (...args: any) => any ? M : never
+    }
+    // 如果全部实现，那么这里应当是一个 never 类型
+    type ExcludedClientFunctions = Exclude<keyof OicqClientFunctions, keyof BotProxyFunctions>
+    // 如果没有完全实现，那么这里就会报错
+    // eslint-disable-next-line no-unused-vars
+    function _implementTest () {
+        // eslint-disable-next-line no-unused-vars
+        // const _test: ExcludedClientFunctions extends never ? undefined : never = undefined
+    }
+
     export type ReturnTypeOfClientMethod<M extends keyof Client> = Client[M] extends (...args: any) => infer R ? (R extends Promise<infer PR> ? PR : R) : never
 
     export interface NodeOICQInvokeMessage<M extends keyof Client> extends BaseMessage {
@@ -149,7 +166,7 @@ export namespace messages {
             /** 当前账号本地存储路径 */
             readonly dir: string;
             /** 配置信息(大部分参数支持热修改) */
-            readonly config: Config;
+            readonly config: Required<Config>;
             /** 数据统计信息 */
             readonly stat: Statistics;
         }
@@ -211,8 +228,17 @@ export namespace messages {
     export interface GetSaveDataMessage extends BaseMessage {
         type: 'get-save-data'
         value: {
-            type: 'local' | 'global'
+            pluginId: string
             qqid?: number
+        }
+    }
+
+    export interface SetSaveDataMessage<T = any> extends BaseMessage {
+        type: 'set-save-data'
+        value: {
+            pluginId: string
+            qqid?: number
+            data: T
         }
     }
 

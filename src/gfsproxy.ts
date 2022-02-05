@@ -3,8 +3,9 @@ import * as oicq from 'oicq'
 import { messages } from './messages'
 import { logger } from '.'
 import EventEmitter = require('events')
+import { purifyObject, restoreObject } from './utils'
 
-export class GFSProxyError extends Error {}
+export class GFSProxyError extends Error { }
 
 /**
  * 在机器人线程里运行的代理群文件对象
@@ -34,7 +35,7 @@ export class GFSProxy extends EventEmitter {
             this.port = port
             this.port.on('message', (value) => {
                 logger.debug('GFSProxy <-', value)
-                const data = value as messages.BaseMessage
+                const data = restoreObject(value) as messages.BaseMessage
                 if (this.awaitingPromises.has(data.id)) {
                     const result = data as unknown as messages.BaseResult
                     const [resolve, reject] = this.awaitingPromises.get(data.id)!!
@@ -67,7 +68,8 @@ export class GFSProxy extends EventEmitter {
                 const msg = messages.makeMessage(type, value)
                 logger.debug('GFSProxy ->', msg)
                 this.awaitingPromises.set(msg.id, [resolve, reject])
-                this.port!!.postMessage(msg)
+                const { data, transferList } = purifyObject(msg)
+                this.port!!.postMessage(data, transferList)
             })
         } else {
             return new Promise((resolve, reject) => {
@@ -75,7 +77,8 @@ export class GFSProxy extends EventEmitter {
                     const msg = messages.makeMessage(type, value)
                     logger.debug('GFSProxy ->', msg)
                     this.awaitingPromises.set(msg.id, [resolve, reject])
-                    this.port!!.postMessage(msg)
+                    const { data, transferList } = purifyObject(msg)
+                    this.port!!.postMessage(data, transferList)
                 })
             })
         }
@@ -152,7 +155,7 @@ export class GFSProxy extends EventEmitter {
      * @param callback 上传进度回调（暂不会调用）
      * @returns 上传成功后的文件信息
      */
-    upload (pathOrBuffer: string | Buffer | Uint8Array, pid?: string, name?: string, callback?: (percentage: string) => void) {
+    upload (pathOrBuffer: string | Buffer, pid?: string, name?: string, callback?: (percentage: string) => void) {
         return this.invoke('node-oicq-gfs-invoke', {
             methodName: 'upload',
             arguments: [pathOrBuffer, pid, name]

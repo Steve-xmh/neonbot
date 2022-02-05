@@ -257,3 +257,35 @@ export async function shutdownPlugin (pluginId: string) {
         throw new Error('未找到插件 ' + pluginId)
     }
 }
+
+/**
+ * 不论存在与否，重启插件线程
+ * @param pluginId 插件ID
+ */
+export async function restartPlugin (pluginId: string) {
+    const plugins = await listPlugins()
+    if (pluginId in plugins) {
+        const plugin = pluginWorkers.get(pluginId)
+        pluginWorkers.delete(pluginId)
+        if (plugin) {
+            logger.info('正在中止插件线程 ' + pluginId + ' 并重启')
+            await plugin.terminate()
+            logger.info('插件 ' + pluginId + ' 已终止')
+        }
+        logger.info('正在重新启动插件 ' + pluginId)
+        const pluginConfigs = await loadConfig()
+        const pluginConfig = pluginConfigs[pluginId]
+        if (pluginConfig) {
+            const canEnable = !!pluginConfig.enabledQQIds.find(v => [...botWorkers.keys()].includes(v))
+            if (canEnable) {
+                for (const qqId of pluginConfig.enabledQQIds) {
+                    if (botWorkers.has(qqId)) {
+                        await enablePlugin(qqId, pluginId)
+                    }
+                }
+            }
+        }
+    } else {
+        throw new Error('未找到插件 ' + pluginId)
+    }
+}

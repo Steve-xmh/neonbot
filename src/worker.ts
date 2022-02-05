@@ -5,8 +5,8 @@ import { acceptableEvents, BotProxy } from './botproxy'
 import { loadConfig, saveConfig } from './config'
 import corePlugins from './core-plugins'
 import { messages } from './messages'
-import { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin, NeonPlugin } from './plugin'
-import { purifyObject, randonID } from './utils'
+import { disablePlugin, enablePlugin, listPluginErrorOutputs, listPlugins, shutdownPlugin, NeonPlugin, restartPlugin } from './plugin'
+import { purifyObject, randonID, restoreObject } from './utils'
 
 export interface WorkerStatus {
     usedMemory: number
@@ -14,7 +14,6 @@ export interface WorkerStatus {
 
 export class NeonWorker extends Worker {
     public ready: boolean = false
-    private lastBeat: number = Date.now()
     private waitReadyPromises: [Function, Function][] = []
 
     constructor (stringUrl: string | URL, options?: WorkerOptions) {
@@ -133,22 +132,18 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             succeed: true,
             value: await listPluginErrorOutputs()
         } as messages.BaseResult)
-    } else if (data.type === 'save-config') {
-        const {
-            qqId,
-            pluginId,
-            pluginData
-        } = (data as messages.SaveConfigMessage).value
-        const pluginConfig = (await loadConfig())[pluginId] || {
+    } else if (data.type === 'get-save-data') {
+        const pluginConfig = (await loadConfig())[data.value.pluginId] || {
             enabledQQIds: [],
             localSavedData: {},
             savedData: undefined
         }
-        if (qqId) {
+        const pluginData = data.value.data
+        if (data.value.qqId) {
             if (pluginData === undefined) {
-                delete pluginConfig.localSavedData[qqId]
+                delete pluginConfig.localSavedData[data.value.qqId]
             } else {
-                pluginConfig.localSavedData[qqId] = pluginData
+                pluginConfig.localSavedData[data.value.qqId] = pluginData
             }
         } else {
             if (pluginData === undefined) {
@@ -158,6 +153,30 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             }
         }
         await saveConfig()
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: undefined
+        } as messages.BaseResult)
+    } else if (data.type === 'set-save-data') {
+        const pluginConfig = (await loadConfig())[data.value.pluginId] || {
+            enabledQQIds: [],
+            localSavedData: {},
+            savedData: undefined
+        }
+        let result
+        if (data.value.qqId) {
+            result = pluginConfig.localSavedData[data.value.qqId]
+        } else {
+            result = pluginConfig.savedData
+        }
+        this.postMessage({
+            id: data.id,
+            type: data.type,
+            succeed: true,
+            value: result
+        } as messages.BaseResult)
     }
 }
 
@@ -266,9 +285,7 @@ export async function createPluginWorker (pluginPath: string, pluginId: string, 
     })
     pluginWorker.once('error', (err) => {
         logger.warn(`插件 ${name || shortName || pluginId} 线程发生错误，正在尝试重启`, err)
-        setTimeout(async () => {
-            pluginWorkers.set(pluginId, await createPluginWorker(pluginPath, pluginId, shortName, name))
-        }, 5000)
+        setTimeout(() => restartPlugin(pluginId), 5000)
     })
     pluginWorker.on('message', async (data: messages.BaseMessage) => {
         if (data.type === 'node-oicq-invoke') {
@@ -350,7 +367,8 @@ export function createBotWorker (qqId: number) {
     return botWorker
 }
 
-export async function onWorkerMessage (this: NeonWorker, message: messages.BaseMessage) {
+export async function onWorkerMessage (this: NeonWorker, data: messages.BaseMessage) {
+    const message = restoreObject(data)
     if ('succeed' in message) {
         return // 这是消息，不处理
     }
@@ -392,14 +410,15 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             })
             for (const eventName of acceptableEvents) {
                 bot.on(eventName, (data: any) => {
+                    const purified = purifyObject(data)
                     const postData: messages.NodeOICQEventMessage = {
                         id: randonID(),
                         eventName: eventName as any,
                         type: 'node-oicq-event',
-                        value: purifyObject(data)
+                        value: purified.data
                     }
                     for (const port of pluginPorts) {
-                        port.postMessage(postData)
+                        port.postMessage(postData, purified.transferList)
                     }
                 })
             }
@@ -449,7 +468,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
         const qqid = pluginMessage.qqId
         if (qqid) {
             if (!botProxies.has(qqid)) {
-                const proxy = new BotProxy(qqid, port)
+                const proxy = new BotProxy(qqid, port, plugin.id)
                 if (plugin.enable) await plugin.enable(proxy, (message as messages.SetPluginMessage).value.pluginData)
                 botProxies.set(qqid, proxy)
             }
@@ -495,16 +514,16 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
             logger.debug('<- Plugin', message)
             if (message.type === 'node-oicq-invoke') {
                 const data = message as messages.NodeOICQInvokeMessage<any>
-                const invokeData = data.value
+                const invokeData = restoreObject(data.value)
                 if (typeof (bot as any)[invokeData.methodName] === 'function') {
                     try {
-                        const value = await (bot as any)[invokeData.methodName](...(invokeData.arguments || []))
+                        const value = purifyObject(await (bot as any)[invokeData.methodName](...(invokeData.arguments || [])))
                         logger.debug(message.id, '->', value)
                         port.postMessage({
                             id: data.id,
                             succeed: true,
-                            value
-                        } as messages.BaseResult)
+                            value: value.data
+                        } as messages.BaseResult, value.transferList)
                     } catch (err) {
                         port.postMessage({
                             id: data.id,
@@ -532,14 +551,15 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                     gfsObj.port.on('message', async (message: messages.BaseMessage) => {
                         if (message.type === 'node-oicq-gfs-invoke') {
                             const data = message as messages.NodeOICQGFSInvokeMessage
-                            const invokeData = data.value
+                            const invokeData = restoreObject(data.value)
                             if (typeof (gfsObj.gfs as any)[invokeData.methodName] === 'function') {
                                 try {
+                                    const result = purifyObject(await (gfsObj.gfs as any)[invokeData.methodName](...(invokeData.arguments || [])))
                                     gfsObj.port.postMessage({
                                         id: data.id,
                                         succeed: true,
-                                        value: await (gfsObj.gfs as any)[invokeData.methodName](...(invokeData.arguments || []))
-                                    } as messages.BaseResult)
+                                        value: result.data
+                                    } as messages.BaseResult, result.transferList)
                                 } catch (err) {
                                     gfsObj.port.postMessage({
                                         id: data.id,
@@ -657,7 +677,7 @@ export async function onWorkerMessage (this: NeonWorker, message: messages.BaseM
                 const proxy = botProxies.get(qqid)
                 if (proxy) {
                     if (plugin.disable) await plugin.disable(proxy)
-                    const newProxy = new BotProxy(qqid, value.port)
+                    const newProxy = new BotProxy(qqid, value.port, plugin.id)
                     botProxies.set(qqid, newProxy)
                     if (plugin.enable) await plugin.enable(newProxy, value.pluginData)
                 }

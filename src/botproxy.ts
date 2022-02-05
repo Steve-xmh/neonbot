@@ -6,6 +6,8 @@ import { PluginInfos } from './plugin'
 import { logger } from '.'
 import { GFSProxy } from './gfsproxy'
 import { randomBytes } from 'crypto'
+import { restoreObject } from './utils'
+import * as path from 'path'
 
 export const acceptableMethods: Set<keyof oicq.Client> = new Set([
     'acquireGfs',
@@ -111,7 +113,7 @@ export class BotProxyError extends Error { }
 /**
  * 在机器人线程里运行的代理机器人，将会转换 oicq 的各类方法调用及事件触发并发送至主线程处理
  *
- * 介于需要跨线程调用，所以此处所有的函数都是异步的
+ * 介于需要跨线程调用，所以此处几乎所有的函数都是异步的
  */
 export class BotProxy extends EventEmitter {
     private awaitingPromises = new Map<string, [(result: any) => void, (reason: any) => void]>()
@@ -174,12 +176,23 @@ export class BotProxy extends EventEmitter {
     }
 
     /** 配置信息，目前不可进行热修改 */
-    config: oicq.Config = {}
+    config: Required<oicq.Config> = {
+        log_level: 'info',
+        platform: 1,
+        auto_server: true,
+        ignore_self: true,
+        resend: true,
+        cache_group_member: true,
+        reconn_interval: 5,
+        data_dir: path.join(require?.main?.path || process.cwd(), 'data'),
+        ffmpeg_path: '',
+        ffprobe_path: ''
+    }
 
     /** 是否在消息前缀加入无意义的随机 [mirai:data={ran:123456}] 消息，可解决消息重复发送导致的消息无法看见的问题 */
     randomHashedMessage = false
 
-    constructor (public readonly qqid: number, private port: MessagePort) {
+    constructor (public readonly qqid: number, private port: MessagePort, private pluginId: string) {
         super()
         logger.debug('创建了新机器人代理对象', qqid, port)
         this.uin = qqid
@@ -190,7 +203,8 @@ export class BotProxy extends EventEmitter {
             logger.debug('警告：通信接口已关闭')
             this.channelClosed = true
         })
-        const messageCallback = (data: messages.BaseMessage) => {
+        const messageCallback = (rawdata: messages.BaseMessage) => {
+            const data = restoreObject(rawdata)
             logger.debug(data)
             if (this.awaitingPromises.has(data.id)) {
                 const result = data as unknown as messages.BaseResult
@@ -365,6 +379,27 @@ export class BotProxy extends EventEmitter {
         }) as Promise<void>
     }
 
+    saveGlobalUserData (data: any) {
+        return this.invokeParentPort('set-save-data', {
+            data
+        }) as Promise<void>
+    }
+
+    loadGlobalUserData<T = any> () {
+        return this.invokeParentPort('get-save-data', {}) as Promise<T | undefined>
+    }
+
+    saveLocalUserData (data: any) {
+        return this.invokeParentPort('set-save-data', {
+            data,
+            qqid: this.qqid
+        }) as Promise<void>
+    }
+
+    loadLocalUserData<T = any> () {
+        return this.invokeParentPort('get-save-data', { qqid: this.qqid }) as Promise<T | undefined>
+    }
+
     // Node-OICQ 自带的函数，已全部异步化
 
     /**
@@ -407,8 +442,7 @@ export class BotProxy extends EventEmitter {
         }) as Promise<void>
     }
 
-    async isOnline () {
-        await this.whenReady()
+    isOnline () {
         return this.online
     }
 

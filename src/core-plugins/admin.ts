@@ -196,13 +196,16 @@ async function onPrivateMessage (this: BotProxy, evt: oicq.PrivateMessageEvent) 
 let offlineTime: Date
 
 async function onOffline (this: BotProxy) {
-    offlineTime = new Date()
+    await this.saveLocalUserData({
+        offlineTime: Date.now()
+    })
 }
 
 async function onOnline (this: BotProxy) {
     for (const admin of config.admins) {
-        if (offlineTime) {
-            await this.sendPrivateMsg(admin, `NeonBot 在 ${getDuration(offlineTime)} (${offlineTime.toLocaleString('zh-cn')}) 断开连接，现已重新上线`)
+        const data = await this.loadLocalUserData()
+        if (data?.offlineTime) {
+            await this.sendPrivateMsg(admin, `NeonBot 在 ${getDuration(new Date(offlineTime))} (${new Date(offlineTime).toLocaleString('zh-cn')}) 断开连接，现已重新上线`)
         } else {
             await this.sendPrivateMsg(admin, 'NeonBot 已上线，正在运行框架，发送 .help 以查看指令帮助')
         }
@@ -216,16 +219,24 @@ const plugin: NeonPlugin = {
     async init (initConfig) {
         config = initConfig
     },
+    async uninit () {
+
+    },
     async enable (bot) {
         bot.randomHashedMessage = true // 防止消息被 PC 端忽略
         bot.on('message.private', onPrivateMessage)
         bot.on('system.online', onOnline)
         bot.on('system.offline', onOffline)
+        await onOnline.call(bot)
     },
     async disable (bot) {
         bot.off('message.private', onPrivateMessage)
         bot.off('system.online', onOnline)
         bot.off('system.offline', onOffline)
+
+        await bot.saveLocalUserData({
+            offlineTime: undefined
+        })
     }
 }
 
