@@ -132,7 +132,7 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             succeed: true,
             value: await listPluginErrorOutputs()
         } as messages.BaseResult)
-    } else if (data.type === 'get-save-data') {
+    } else if (data.type === 'set-save-data') {
         const pluginConfig = (await loadConfig())[data.value.pluginId] || {
             enabledQQIds: [],
             localSavedData: {},
@@ -159,7 +159,7 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             succeed: true,
             value: undefined
         } as messages.BaseResult)
-    } else if (data.type === 'set-save-data') {
+    } else if (data.type === 'get-save-data') {
         const pluginConfig = (await loadConfig())[data.value.pluginId] || {
             enabledQQIds: [],
             localSavedData: {},

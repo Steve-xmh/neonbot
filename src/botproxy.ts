@@ -381,23 +381,27 @@ export class BotProxy extends EventEmitter {
 
     saveGlobalUserData (data: any) {
         return this.invokeParentPort('set-save-data', {
+            pluginId: this.pluginId,
             data
         }) as Promise<void>
     }
 
     loadGlobalUserData<T = any> () {
-        return this.invokeParentPort('get-save-data', {}) as Promise<T | undefined>
+        return this.invokeParentPort('get-save-data', {
+            pluginId: this.pluginId
+        }) as Promise<T | undefined>
     }
 
     saveLocalUserData (data: any) {
         return this.invokeParentPort('set-save-data', {
             data,
+            pluginId: this.pluginId,
             qqid: this.qqid
         }) as Promise<void>
     }
 
     loadLocalUserData<T = any> () {
-        return this.invokeParentPort('get-save-data', { qqid: this.qqid }) as Promise<T | undefined>
+        return this.invokeParentPort('get-save-data', { qqid: this.qqid, pluginId: this.pluginId }) as Promise<T | undefined>
     }
 
     // Node-OICQ 自带的函数，已全部异步化
