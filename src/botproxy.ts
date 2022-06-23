@@ -289,6 +289,18 @@ export class BotProxy extends EventEmitter {
             break
         }
         }
+        if (evt.post_type === 'message') {
+            if ((evt as any).message_type === 'group') {
+                (evt as any).reply = (content: oicq.Sendable, quote?: boolean) =>
+                    this.sendGroupMsg((evt as oicq.GroupMessageEvent).group_id, content, quote ? (evt as oicq.GroupMessageEvent) : undefined)
+            } else if ((evt as any).message_type === 'discuss') {
+                (evt as any).reply = (content: oicq.Sendable, quote?: boolean) =>
+                    this.sendDiscussMsg((evt as oicq.GroupMessageEvent).group_id, content, quote ? (evt as oicq.DiscussMessageEvent) : undefined)
+            } else {
+                (evt as any).reply = (content: oicq.Sendable, quote?: boolean) =>
+                    this.sendPrivateMsg((evt as oicq.PrivateMessageEvent).from_id, content, quote ? (evt as oicq.PrivateMessageEvent) : undefined)
+            }
+        }
         const listeners = this.listeners(msg.eventName)
         logger.debug(listeners)
         this.emit(msg.eventName, evt)
