@@ -219,9 +219,7 @@ const plugin: NeonPlugin = {
     async init (initConfig) {
         config = initConfig
     },
-    async uninit () {
-
-    },
+    async uninit () {},
     async enable (bot) {
         bot.randomHashedMessage = true // 防止消息被 PC 端忽略
         bot.on('message.private', onPrivateMessage)
@@ -230,6 +228,11 @@ const plugin: NeonPlugin = {
         await onOnline.call(bot)
     },
     async disable (bot) {
+        // 当核心插件被禁用，一般是被关闭了
+        for (const admin of config.admins) {
+            await bot.sendPrivateMsg(admin, 'NeonBot 正在停止运行')
+        }
+
         bot.off('message.private', onPrivateMessage)
         bot.off('system.online', onOnline)
         bot.off('system.offline', onOffline)

@@ -24,8 +24,9 @@ export class GFSProxy extends EventEmitter {
         portReciever: Promise<MessagePort>
     ) {
         super()
-        process.once('uncaughtException', () => {
+        process.once('uncaughtException', (err) => {
             this.close() // 出错时关闭通讯接口
+            logger.warn('发生未捕获错误，已停止 GFSProxy 接口：', err)
         })
         process.once('beforeExit', () => {
             this.close() // 退出时关闭通讯接口
@@ -176,5 +177,6 @@ export class GFSProxy extends EventEmitter {
     close () {
         this.port?.close()
         this.closed = true
+        logger.warn('GFSProxy 已关闭！')
     }
 }

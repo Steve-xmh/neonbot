@@ -7,6 +7,7 @@ import corePlugins from './core-plugins'
 import { createBotWorker, createCorePluginWorker, NeonWorker, onWorkerMessage } from './worker'
 import { enablePlugin, listPlugins } from './plugin'
 import { clearConfigLock, loadConfig } from './config'
+import commands from './commands'
 
 /** 原 OICQ 库 */
 export * as oicq from 'oicq'
@@ -62,6 +63,11 @@ export const corePluginWorkers = new Map<string, NeonWorker>()
 export const botWorkers = new Map<number, NeonWorker>()
 export const indexPath = __filename
 export let config: NeonBotConfig
+
+async function onStoping () {
+    logger.info('正在停止 NeonBot！')
+    await commands.stop.exec([])
+}
 
 async function main () {
     logger.info('线程 ID', threadId)
@@ -130,6 +136,8 @@ async function main () {
             }
             logger.info('初始化完成！输入 help 以查看命令行帮助')
             logger.info('你也可以通过管理员账户发送 .help 查看聊天管理帮助')
+            process.on('SIGINT', onStoping)
+            if (process.send) process.send('ready')
         }
     } else {
         parentPort!!.on('message', onWorkerMessage)

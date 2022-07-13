@@ -44,8 +44,8 @@ const stop: Command = {
                 type: 'stop-bot'
             } as messages.StopBotMessage)
         })))
-        logger.warn('所有线程已停止！正在退出')
-        process.exit()
+        logger.warn('所有线程已停止！正在终止进程！')
+        process.exit(0)
     }
 }
 
