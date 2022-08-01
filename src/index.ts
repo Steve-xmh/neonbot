@@ -108,7 +108,10 @@ async function main () {
             // Launch bots
             logger.info('正在启动机器人线程')
             for (const qqid in config.accounts) {
-                botWorkers.set(parseInt(qqid), createBotWorker(parseInt(qqid)))
+                const botWorker = createBotWorker(parseInt(qqid))
+                botWorkers.set(parseInt(qqid), botWorker)
+                logger.info('正在等待机器人', parseInt(qqid), '上线')
+                await botWorker.waitOnline()
             }
             // Launch core plugins
             logger.info('正在启动核心插件线程')

@@ -14,10 +14,13 @@ export interface WorkerStatus {
 
 export class NeonWorker extends Worker {
     public ready: boolean = false
+    private hasOnline: boolean = false
     private waitReadyPromises: [Function, Function][] = []
+    private waitOnceOnlinePromises: [Function, Function][] = []
 
     constructor (stringUrl: string | URL, options?: WorkerOptions) {
         super(stringUrl, options)
+        this.on('message', this.onceOnlineMessage)
         this.on('message', this.onReadyMessage)
     }
 
@@ -27,6 +30,19 @@ export class NeonWorker extends Worker {
         } else {
             this.waitReady().then(() => {
                 Worker.prototype.postMessage.call(this, value, transferList)
+            })
+        }
+    }
+
+    /**
+     * 等待机器人第一次正式上线后返回回调，如果登录失败则会抛出错误
+     */
+    async waitOnline (): Promise<void> {
+        if (this.hasOnline) {
+            return Promise.resolve()
+        } else {
+            return new Promise((resolve, reject) => {
+                this.waitOnceOnlinePromises.push([resolve, reject])
             })
         }
     }
@@ -48,8 +64,21 @@ export class NeonWorker extends Worker {
     private onReadyMessage (value: messages.BaseMessage) {
         if (value.type === 'worker-ready') {
             this.ready = true
-            this.off('message', this.onReadyMessage)
             for (const [resolve] of this.waitReadyPromises) { resolve() }
+        }
+    }
+
+    private onceOnlineMessage (value: messages.BaseMessage) {
+        if (value.type === 'bot-ready') {
+            this.hasOnline = !!value.value
+            this.off('message', this.onceOnlineMessage)
+            for (const [resolve, reject] of this.waitOnceOnlinePromises) {
+                if (this.hasOnline) {
+                    resolve()
+                } else {
+                    reject()
+                }
+            }
         }
     }
 }
@@ -367,6 +396,7 @@ export function createBotWorker (qqId: number) {
     return botWorker
 }
 
+let botHasOnline = false
 export async function onWorkerMessage (this: NeonWorker, data: messages.BaseMessage) {
     const message = restoreObject(data)
     if ('succeed' in message) {
@@ -387,26 +417,32 @@ export async function onWorkerMessage (this: NeonWorker, data: messages.BaseMess
             })
             bot.on('system.online', () => {
                 logger.info('账户已登录上线，开始接收消息')
+                if (!botHasOnline) {
+                    botHasOnline = true
+                    this.postMessage({
+                        id: randonID(),
+                        type: 'bot-ready',
+                        value: true
+                    } as messages.BaseMessage)
+                }
             })
             bot.on('system.offline', (event) => {
                 logger.warn('账户已离线，正在重新登录')
                 bot.login()
             })
-            bot.on('system.login', (event) => {
-                switch (event.sub_type) {
-                case 'device': {
-                    logger.warn('检测到设备锁，请完成验证后重启机器人以继续登录', event.url)
-                    break
-                }
-                case 'error': {
-                    logger.error('登录账户失败', `#${event.code}`, event.message)
-                    break
-                }
-                case 'slider': {
-                    logger.warn('检测到滑动验证，请完成验证后后在控制台内输入', 'verify ' + qqid + ' [token]', '以继续登录', event.url)
-                    break
-                }
-                }
+            bot.on('system.login.slider', (event) => {
+                logger.warn('检测到滑动验证，请完成验证后后在控制台内输入', 'verify ' + qqid + ' [token]', '以继续登录', event.url)
+            })
+            bot.on('system.login.device', (event) => {
+                logger.warn('检测到设备锁，请完成验证后重启机器人以继续登录', event.url)
+            })
+            bot.on('system.login.error', (event) => {
+                logger.error('登录账户失败', `#${event.code}`, event.message)
+                this.postMessage({
+                    id: randonID(),
+                    type: 'bot-ready',
+                    value: false
+                } as messages.BaseMessage)
             })
             for (const eventName of acceptableEvents) {
                 bot.on(eventName, (data: any) => {

@@ -16,6 +16,7 @@ export namespace messages {
 
     export type EventNames =
         'deploy-worker' |
+        'bot-ready' |
         'worker-ready' |
         'list-plugins' |
         'list-plugin-error-outputs' |
