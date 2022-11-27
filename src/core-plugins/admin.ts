@@ -209,6 +209,9 @@ async function onOnline (this: BotProxy) {
         } else {
             await this.sendPrivateMsg(admin, 'NeonBot 已上线，正在运行框架，发送 .help 以查看指令帮助')
         }
+        await this.saveLocalUserData({
+            offlineTime: undefined
+        })
     }
 }
 

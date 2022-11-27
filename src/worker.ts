@@ -162,15 +162,17 @@ async function onCoreTypeMessage (this: NeonWorker, data: messages.BaseMessage) 
             value: await listPluginErrorOutputs()
         } as messages.BaseResult)
     } else if (data.type === 'set-save-data') {
-        const pluginConfig = (await loadConfig())[data.value.pluginId] || {
+        const pluginsConfig = await loadConfig()
+        const pluginConfig = pluginsConfig[data.value.pluginId] || {
             enabledQQIds: [],
             localSavedData: {},
             savedData: undefined
         }
+        pluginsConfig[data.value.pluginId] = pluginConfig
         const pluginData = data.value.data
         if (data.value.qqId) {
             if (pluginData === undefined) {
-                delete pluginConfig.localSavedData[data.value.qqId]
+                pluginConfig.localSavedData[data.value.qqId] = undefined
             } else {
                 pluginConfig.localSavedData[data.value.qqId] = pluginData
             }
