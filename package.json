@@ -14,9 +14,9 @@
     "dist": "tsc"
   },
   "dependencies": {
+    "icqq": "^0.0.12-7",
     "lockfile": "^1.0.4",
     "nanoid": "^3.1.23",
-    "oicq": "^2.3.1",
     "typescript": "^4.3.2"
   },
   "devDependencies": {

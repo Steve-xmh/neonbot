@@ -8,6 +8,7 @@ import help from './help'
 import reload from './reload'
 import restart from './restart'
 import stop from './stop'
+import login from './login-qrcode'
 
 export interface Command {
     description: string,
@@ -20,5 +21,6 @@ export default {
     help,
     reload,
     restart,
-    stop
+    stop,
+    login
 }

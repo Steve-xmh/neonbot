@@ -1,6 +1,6 @@
 import { isMainThread, parentPort, threadId, workerData } from 'worker_threads'
 import * as log4js from 'log4js'
-import { Config, Platform } from 'oicq'
+import { Config, Platform } from 'icqq'
 import { resolve } from 'path'
 import { setupConsole } from './console'
 import corePlugins from './core-plugins'
@@ -10,7 +10,7 @@ import { clearConfigLock, loadConfig } from './config'
 import commands from './commands'
 
 /** 原 OICQ 库 */
-export * as oicq from 'oicq'
+export * as oicq from 'icqq'
 export type { NeonPlugin, InitConfig } from './plugin'
 export type { BotProxy, BotProxyError } from './botproxy'
 

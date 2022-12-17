@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto'
 import { AccountConfig, BotProxy } from '.'
-import { Client, Config, EventMap, FriendInfo, Gender, GroupInfo, MemberInfo, Message, MessageElem, Statistics, StrangerInfo } from 'oicq'
+import { Client, Config, EventMap, FriendInfo, Gender, GroupInfo, MemberInfo, Message, MessageElem, Statistics, StrangerInfo } from 'icqq'
 import { randonID } from './utils'
 import { InitConfig } from './plugin'
 import { MessagePort } from 'worker_threads'
@@ -34,7 +34,8 @@ export namespace messages {
         'save-config' |
         'stop-bot' |
         'get-save-data' |
-        'set-save-data'
+        'set-save-data' |
+        'login-qrcode'
 
     export enum WorkerType {
         // eslint-disable-next-line no-unused-vars

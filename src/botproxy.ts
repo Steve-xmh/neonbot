@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { MessagePort, parentPort } from 'worker_threads'
 import { messages } from './messages'
-import * as oicq from 'oicq'
+import * as oicq from 'icqq'
 import { PluginInfos } from './plugin'
 import { logger } from '.'
 import { GFSProxy } from './gfsproxy'

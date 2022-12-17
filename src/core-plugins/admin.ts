@@ -4,7 +4,7 @@
  */
 
 import { InitConfig, NeonPlugin } from '../plugin'
-import * as oicq from 'oicq'
+import * as oicq from 'icqq'
 import { BotProxy } from '../botproxy'
 import * as os from 'os'
 import { formatBinarySize, getDuration } from '../utils'

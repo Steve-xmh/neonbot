@@ -1,4 +1,4 @@
-import { Client, createClient, Gfs, PrivateMessage } from 'oicq'
+import { Client, createClient, Gfs, PrivateMessage } from 'icqq'
 import { TransferListItem, Worker, WorkerOptions, MessagePort, parentPort, MessageChannel } from 'worker_threads'
 import { botWorkers, config, corePluginWorkers, logger, pluginWorkers, indexPath } from '.'
 import { acceptableEvents, BotProxy } from './botproxy'
@@ -14,10 +14,13 @@ export interface WorkerStatus {
 
 export class NeonWorker extends Worker {
     public ready: boolean = false
-    private hasOnline: boolean = false
+    private _hasOnline: boolean = false
+    public get hasOnline() : boolean {
+        return this._hasOnline
+    }
     private waitReadyPromises: [Function, Function][] = []
     private waitOnceOnlinePromises: [Function, Function][] = []
-
+    
     constructor (stringUrl: string | URL, options?: WorkerOptions) {
         super(stringUrl, options)
         this.on('message', this.onceOnlineMessage)
@@ -38,7 +41,7 @@ export class NeonWorker extends Worker {
      * 等待机器人第一次正式上线后返回回调，如果登录失败则会抛出错误
      */
     async waitOnline (): Promise<void> {
-        if (this.hasOnline) {
+        if (this._hasOnline) {
             return Promise.resolve()
         } else {
             return new Promise((resolve, reject) => {
@@ -70,10 +73,10 @@ export class NeonWorker extends Worker {
 
     private onceOnlineMessage (value: messages.BaseMessage) {
         if (value.type === 'bot-ready') {
-            this.hasOnline = !!value.value
+            this._hasOnline = !!value.value
             this.off('message', this.onceOnlineMessage)
             for (const [resolve, reject] of this.waitOnceOnlinePromises) {
-                if (this.hasOnline) {
+                if (this._hasOnline) {
                     resolve()
                 } else {
                     reject()
@@ -432,6 +435,9 @@ export async function onWorkerMessage (this: NeonWorker, data: messages.BaseMess
                 logger.warn('账户已离线，正在重新登录')
                 bot.login()
             })
+            bot.on('internal.qrcode', () => {
+                logger.warn('检测到二维码验证，请完成扫码验证后后在控制台内输入', 'loginqrcode ' + qqid, '以继续登录')
+            })
             bot.on('system.login.slider', (event) => {
                 logger.warn('检测到滑动验证，请完成验证后后在控制台内输入', 'verify ' + qqid + ' [token]', '以继续登录', event.url)
             })
@@ -519,6 +525,13 @@ export async function onWorkerMessage (this: NeonWorker, data: messages.BaseMess
             bot.submitSlider(message.value.token)
         } else {
             logger.warn('机器人尚未初始化，无法验证！')
+        }
+        break
+    }
+    case 'login-qrcode':
+    {
+        if (bot) {
+            bot.qrcodeLogin()
         }
         break
     }

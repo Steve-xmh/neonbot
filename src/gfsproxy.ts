@@ -1,5 +1,5 @@
 import { MessagePort } from 'worker_threads'
-import * as oicq from 'oicq'
+import * as oicq from 'icqq'
 import { messages } from './messages'
 import { logger } from '.'
 import EventEmitter = require('events')
